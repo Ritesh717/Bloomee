@@ -1542,6 +1542,46 @@ class BloomeeDBService {
 
     return results;
   }
+
+  static Future<void> moveDownloads(
+      String newPath,
+      Function(int current, int total, String fileName) onProgress,
+      ) async {
+    Isar isarDB = await db;
+    List<DownloadDB> allDownloads = await isarDB.downloadDBs.where().findAll();
+    int total = allDownloads.length;
+    int current = 0;
+
+    for (var download in allDownloads) {
+      current++;
+      onProgress(current, total, download.fileName);
+
+      try {
+        final oldFile = File(p.join(download.filePath, download.fileName));
+        if (await oldFile.exists()) {
+          final newFile = File(p.join(newPath, download.fileName));
+          log("Moving ${download.fileName} to $newPath", name: "BloomeeDBService");
+          // Ensure directory exists
+          if (!await newFile.parent.exists()) {
+            await newFile.parent.create(recursive: true);
+          }
+
+          // Move file
+          await oldFile.copy(newFile.path);
+          await oldFile.delete();
+
+          // Update DB
+          download.filePath = newPath;
+          await isarDB.writeTxn(() => isarDB.downloadDBs.put(download));
+          log("Moved ${download.fileName} to $newPath", name: "BloomeeDBService");
+        } else {
+          log("File not found: ${download.fileName}", name: "BloomeeDBService");
+        }
+      } catch (e) {
+        log("Failed to move ${download.fileName}", error: e, name: "BloomeeDBService");
+      }
+    }
+  }
 }
 
 ArtistModel formatSavedArtistOnl(SavedCollectionsDB savedCollectionsDB) {

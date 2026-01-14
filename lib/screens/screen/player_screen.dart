@@ -133,7 +133,7 @@ class _AudioPlayerViewState extends State<AudioPlayerView>
                           constraints: constraints,
                         ),
                         UpNextPanel(
-                          peekHeight: 60.0,
+                          peekHeight: 90.0,
                           parentHeight: constraints.maxHeight,
                           controller: _upNextPanelController,
                         ),
@@ -275,7 +275,7 @@ class CoverImageVolSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
-    return VolumeDragController(
+    return Center(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(25),
         child: StreamBuilder<MediaItem?>(
@@ -336,7 +336,7 @@ class _SongInfoRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          flex: 7,
+          flex: 10,
           child: StreamBuilder<MediaItem?>(
               stream: bloomeePlayerCubit.bloomeePlayer.mediaItem,
               builder: (context, snapshot) {

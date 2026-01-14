@@ -188,8 +188,10 @@ class SettingsCubit extends Cubit<SettingsState> {
   }
 
   void setDownPath(String value) {
+    log("setDownPath called with: $value", name: 'SettingsCubit');
     BloomeeDBService.putSettingStr(GlobalStrConsts.downPathSetting, value);
     emit(state.copyWith(downPath: value));
+    log("setDownPath emitted state with: ${state.downPath}", name: 'SettingsCubit');
   }
 
   void setDownQuality(String value) {

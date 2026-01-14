@@ -40,19 +40,36 @@ class DownloaderCubit extends Cubit<DownloaderState> {
   }
 
   Future<Directory> _getDownloadDirectory() async {
+    // Check if a custom download path is set in settings
+    final customPath =
+        await BloomeeDBService.getSettingStr(GlobalStrConsts.downPathSetting);
+    
+    if (customPath != null && customPath.isNotEmpty) {
+      final customDir = Directory(customPath);
+      // On Android, if we have permission, we can use this path.
+      // We assume permission is checked/granted at selection time or runtime.
+      if (await customDir.exists()) {
+         return customDir;
+      } else {
+        // Try creating it if it doesn't exist (optional, but good practice)
+        try {
+          await customDir.create(recursive: true);
+          return customDir;
+        } catch (e) {
+          log("Failed to create custom directory: $e", name: "DownloaderCubit");
+          // Fallback if creation fails
+        }
+      }
+    }
+
     if (Platform.isAndroid || Platform.isIOS) {
-      // For Android and iOS, use the internal storage's downloads directory
+      // For Android (fallback) and iOS, use the internal storage's downloads directory
       final directory = (await getDownloadsDirectory()) ??
           await getApplicationDocumentsDirectory();
       return directory;
     }
-    // For other platforms, use the application documents directory by default
-    // This can be adjusted based on your requirements
-    final path =
-        await BloomeeDBService.getSettingStr(GlobalStrConsts.downPathSetting);
-    if (path != null) {
-      return Directory(path);
-    }
+    
+    // Desktop default
     return await getApplicationDocumentsDirectory();
   }
 

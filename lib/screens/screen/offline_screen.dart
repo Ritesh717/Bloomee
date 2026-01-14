@@ -8,6 +8,7 @@ import 'package:Bloomee/screens/widgets/sign_board_widget.dart';
 import 'package:Bloomee/screens/widgets/song_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:Bloomee/theme_data/default.dart';
+import 'package:Bloomee/screens/screen/home_views/setting_views/download_setting.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:icons_plus/icons_plus.dart';
 
@@ -156,6 +157,20 @@ class _OfflineScreenState extends State<OfflineScreen> {
                   icon: const Icon(MingCute.refresh_2_line),
                   onPressed: () {
                     context.read<DownloaderCubit>().refreshDownloadedSongs();
+                  },
+                ),
+              )
+            : const SizedBox.shrink(),
+        !_isSearch
+            ? Tooltip(
+                message: "Download Settings",
+                child: IconButton(
+                  icon: const Icon(MingCute.settings_3_line),
+                  onPressed: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const DownloadSettings()));
                   },
                 ),
               )
