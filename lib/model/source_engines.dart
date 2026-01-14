@@ -2,7 +2,7 @@ import 'package:Bloomee/routes_and_consts/global_str_consts.dart';
 import 'package:Bloomee/services/db/bloomee_db_service.dart';
 
 enum SourceEngine {
-  eng_JIS("JISaavn"),
+  eng_JIS("JIOSaavn"),
   eng_YTM("YTMusic"),
   eng_YTV("YTVideo");
 

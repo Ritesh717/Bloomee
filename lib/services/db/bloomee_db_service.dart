@@ -464,6 +464,73 @@ class BloomeeDBService {
     return id;
   }
 
+  static Future<void> addMediaItems(
+      List<MediaItemDB> mediaItemsDB, String playlistName) async {
+    Isar isarDB = await db;
+    MediaPlaylistDB mediaPlaylistDB =
+        MediaPlaylistDB(playlistName: playlistName);
+
+    // search for playlist if already exists
+    MediaPlaylistDB? _mediaPlaylistDB = isarDB.mediaPlaylistDBs
+        .filter()
+        .isarIdEqualTo(mediaPlaylistDB.isarId)
+        .findFirstSync();
+
+    if (_mediaPlaylistDB == null) {
+      // create playlist if not exists
+      await createPlaylist(playlistName);
+      _mediaPlaylistDB = isarDB.mediaPlaylistDBs
+          .filter()
+          .isarIdEqualTo(mediaPlaylistDB.isarId)
+          .findFirstSync();
+    }
+
+    if (_mediaPlaylistDB == null) return;
+
+    await isarDB.writeTxn(() async {
+      // 1. Process all media items
+      for (var mediaItemDB in mediaItemsDB) {
+        // search for media item if already exists
+        MediaItemDB? _mediaitem = await isarDB.mediaItemDBs
+            .filter()
+            .permaURLEqualTo(mediaItemDB.permaURL)
+            .findFirst();
+
+        if (_mediaitem != null) {
+          // update existing
+          _mediaitem.mediaInPlaylistsDB.add(_mediaPlaylistDB!);
+          await isarDB.mediaItemDBs.put(_mediaitem);
+          // Update ref for ranking
+          mediaItemDB.id = _mediaitem.id;
+        } else {
+          // create new
+          mediaItemDB.mediaInPlaylistsDB.add(_mediaPlaylistDB!);
+          mediaItemDB.id = await isarDB.mediaItemDBs.put(mediaItemDB);
+        }
+      }
+
+      // 2. Update Playlist Ranks
+      // Reload playlist to be safe (though we have ref)
+      MediaPlaylistDB? playlistToUpdate =
+          await isarDB.mediaPlaylistDBs.get(_mediaPlaylistDB!.isarId);
+      if (playlistToUpdate != null) {
+        List<int> currentRanks =
+            playlistToUpdate.mediaRanks.toList(growable: true);
+        bool changed = false;
+        for (var item in mediaItemsDB) {
+          if (item.id != null && !currentRanks.contains(item.id)) {
+            currentRanks.add(item.id!);
+            changed = true;
+          }
+        }
+        if (changed) {
+          playlistToUpdate.mediaRanks = currentRanks;
+          await isarDB.mediaPlaylistDBs.put(playlistToUpdate);
+        }
+      }
+    });
+  }
+
   static Future<void> removeMediaItem(MediaItemDB mediaItemDB) async {
     Isar isarDB = await db;
     bool _res = false;
@@ -1544,9 +1611,9 @@ class BloomeeDBService {
   }
 
   static Future<void> moveDownloads(
-      String newPath,
-      Function(int current, int total, String fileName) onProgress,
-      ) async {
+    String newPath,
+    Function(int current, int total, String fileName) onProgress,
+  ) async {
     Isar isarDB = await db;
     List<DownloadDB> allDownloads = await isarDB.downloadDBs.where().findAll();
     int total = allDownloads.length;
@@ -1560,7 +1627,8 @@ class BloomeeDBService {
         final oldFile = File(p.join(download.filePath, download.fileName));
         if (await oldFile.exists()) {
           final newFile = File(p.join(newPath, download.fileName));
-          log("Moving ${download.fileName} to $newPath", name: "BloomeeDBService");
+          log("Moving ${download.fileName} to $newPath",
+              name: "BloomeeDBService");
           // Ensure directory exists
           if (!await newFile.parent.exists()) {
             await newFile.parent.create(recursive: true);
@@ -1573,12 +1641,14 @@ class BloomeeDBService {
           // Update DB
           download.filePath = newPath;
           await isarDB.writeTxn(() => isarDB.downloadDBs.put(download));
-          log("Moved ${download.fileName} to $newPath", name: "BloomeeDBService");
+          log("Moved ${download.fileName} to $newPath",
+              name: "BloomeeDBService");
         } else {
           log("File not found: ${download.fileName}", name: "BloomeeDBService");
         }
       } catch (e) {
-        log("Failed to move ${download.fileName}", error: e, name: "BloomeeDBService");
+        log("Failed to move ${download.fileName}",
+            error: e, name: "BloomeeDBService");
       }
     }
   }

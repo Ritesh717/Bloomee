@@ -22,6 +22,13 @@ class ArtistCubit extends Cubit<ArtistState> {
   }) : super(ArtistInitial()) {
     emit(ArtistLoading(artist: artist));
     checkIsSaved();
+
+    if (artist.source == 'local') {
+      emit(ArtistLoaded(
+          artist: artist, isSavedCollection: state.isSavedCollection));
+      return;
+    }
+
     switch (sourceEngine) {
       case SourceEngine.eng_JIS:
         SaavnAPI()

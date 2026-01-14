@@ -5,7 +5,6 @@ import 'package:Bloomee/utils/imgurl_formator.dart';
 import 'package:Bloomee/utils/load_Image.dart';
 import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
-import 'package:responsive_framework/responsive_framework.dart';
 
 class AlbumCard extends StatelessWidget {
   final AlbumModel album;
@@ -22,14 +21,11 @@ class AlbumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-        padding: const EdgeInsets.only(
-          top: 10,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: LayoutBuilder(builder: (context, constraints) {
           return SizedBox(
-            width: ResponsiveBreakpoints.of(context).isMobile
-                ? constraints.maxWidth * 0.9
-                : 220,
+            width: double.infinity,
+            height: 70, // Fixed height for list item
             child: GestureDetector(
               onTap: () {
                 Navigator.push(
@@ -47,14 +43,15 @@ class AlbumCard extends StatelessWidget {
                 onExit: (event) {
                   setHovering(false);
                 },
-                child: Card(
+                child: Container(
                   color: Colors.transparent,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Row(
                     children: [
-                      SizedBox.square(
-                        child: Hero(
-                          tag: album.sourceId,
+                      // Album Art
+                      AspectRatio(
+                        aspectRatio: 1,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
                           child: Stack(
                             children: [
                               LoadImageCached(
@@ -79,7 +76,7 @@ class AlbumCard extends StatelessWidget {
                                           child: const Icon(
                                             MingCute.play_circle_line,
                                             color: Colors.white,
-                                            size: 50,
+                                            size: 30,
                                           ),
                                         ),
                                       ),
@@ -91,33 +88,46 @@ class AlbumCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: 8,
-                        ),
-                        child: Text(
-                          album.name,
-                          maxLines: 2,
-                          textAlign: TextAlign.center,
-                          style: Default_Theme.secondoryTextStyleMedium
-                              .merge(TextStyle(
-                            fontSize: 14,
-                            color: Default_Theme.primaryColor1
-                                .withValues(alpha: 0.9),
-                          )),
+                      const SizedBox(width: 15),
+                      // Text Info
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              album.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Default_Theme.secondoryTextStyleMedium
+                                  .merge(TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Default_Theme.primaryColor1
+                                    .withValues(alpha: 0.9),
+                              )),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Album • ${album.artists}",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Default_Theme.secondoryTextStyleMedium
+                                  .merge(TextStyle(
+                                fontSize: 13,
+                                color: Default_Theme.primaryColor1
+                                    .withValues(alpha: 0.7),
+                              )),
+                            ),
+                          ],
                         ),
                       ),
-                      Text(
-                        album.artists,
-                        maxLines: 1,
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                        style: Default_Theme.secondoryTextStyleMedium
-                            .merge(TextStyle(
-                          fontSize: 12,
-                          color: Default_Theme.primaryColor1
-                              .withValues(alpha: 0.7),
-                        )),
+                      // Options Icon (Optional, keeping minimal for now)
+                      Icon(
+                        Icons.more_vert_rounded,
+                        color:
+                            Default_Theme.primaryColor1.withValues(alpha: 0.5),
+                        size: 20,
                       ),
                     ],
                   ),

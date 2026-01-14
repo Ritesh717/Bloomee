@@ -11,8 +11,13 @@ import 'package:Bloomee/utils/load_Image.dart';
 import 'package:Bloomee/blocs/downloader/cubit/downloader_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:icons_plus/icons_plus.dart';
+// import 'package:icons_plus/icons_plus.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:Bloomee/screens/widgets/sticky_action_bar_delegate.dart';
+// import 'package:Bloomee/services/db/bloomee_db_service.dart'; // Ensure DB service is available if needed for Share export (Wait, usually in cubit or UI helper)
+// import 'package:Bloomee/services/import_export_service.dart';
+import 'package:Bloomee/screens/screen/common_views/add_to_playlist_from_list_screen.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AlbumView extends StatefulWidget {
@@ -143,168 +148,19 @@ class _AlbumViewState extends State<AlbumView> {
                                         ),
                                       ),
                                       FittedBox(
-                                        fit: BoxFit.scaleDown,
+                                        fit: BoxFit
+                                            .scaleDown, // Keeping just textual info here or remove?
                                         child: Padding(
                                           padding:
                                               const EdgeInsets.only(top: 8),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              OutlinedButton.icon(
-                                                style: OutlinedButton.styleFrom(
-                                                  side: const BorderSide(
-                                                    width: 2,
-                                                    color: Default_Theme
-                                                        .accentColor2,
-                                                  ),
-                                                ),
-                                                onPressed: () {
-                                                  if (context
-                                                          .read<
-                                                              BloomeePlayerCubit>()
-                                                          .bloomeePlayer
-                                                          .queueTitle
-                                                          .value !=
-                                                      widget.album.name) {
-                                                    context
-                                                        .read<
-                                                            BloomeePlayerCubit>()
-                                                        .bloomeePlayer
-                                                        .loadPlaylist(
-                                                            state
-                                                                .album.playlist,
-                                                            doPlay: true,
-                                                            idx: 0);
-                                                  } else if (!context
-                                                      .read<
-                                                          BloomeePlayerCubit>()
-                                                      .bloomeePlayer
-                                                      .audioPlayer
-                                                      .playing) {
-                                                    context
-                                                        .read<
-                                                            BloomeePlayerCubit>()
-                                                        .bloomeePlayer
-                                                        .play();
-                                                  }
-                                                },
-                                                label: const Text(
-                                                  "Play",
-                                                  style: Default_Theme
-                                                      .secondoryTextStyleMedium,
-                                                ),
-                                                icon: const Icon(
-                                                  MingCute.play_fill,
-                                                  size: 20,
-                                                ),
-                                              ),
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                  left: 5,
-                                                ),
-                                                child: IconButton(
-                                                  onPressed: () {
-                                                    albumCubit
-                                                        .addToSavedCollections();
-                                                  },
-                                                  icon: state
-                                                          .isSavedToCollections
-                                                      ? const Icon(FontAwesome
-                                                          .heart_solid)
-                                                      : const Icon(
-                                                          FontAwesome.heart),
-                                                  color: Default_Theme
-                                                      .accentColor2,
-                                                ),
-                                              ),
-                                              Tooltip(
-                                                message: "Open Original Link",
-                                                child: IconButton(
-                                                  onPressed: () {
-                                                    SnackbarService.showMessage(
-                                                        "Opening original album page.");
-                                                    launchUrl(
-                                                        Uri.parse(state
-                                                            .album.sourceURL),
-                                                        mode: LaunchMode
-                                                            .externalApplication);
-                                                  },
-                                                  icon: const Icon(
-                                                    MingCute.external_link_line,
-                                                    size: 25,
-                                                  ),
-                                                ),
-                                              ),
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    left: 5),
-                                                child: BlocBuilder<
-                                                        DownloaderCubit,
-                                                        DownloaderState>(
-                                                    builder: (context,
-                                                        downloaderState) {
-                                                  final songs =
-                                                      state.album.songs;
-                                                  bool isAlbumDownloaded =
-                                                      false;
-                                                  if (songs.isNotEmpty) {
-                                                    isAlbumDownloaded =
-                                                        songs.every((song) =>
-                                                            downloaderState
-                                                                .downloaded
-                                                                .any((d) =>
-                                                                    d.id ==
-                                                                    song.id));
-                                                  }
-
-                                                  return Tooltip(
-                                                    message: isAlbumDownloaded
-                                                        ? "Album Downloaded"
-                                                        : "Download All",
-                                                    child: IconButton(
-                                                      onPressed: () {
-                                                        if (isAlbumDownloaded) {
-                                                          SnackbarService
-                                                              .showMessage(
-                                                                  "Album already downloaded");
-                                                          return;
-                                                        }
-
-                                                        if (songs.isNotEmpty) {
-                                                          SnackbarService
-                                                              .showMessage(
-                                                                  "Starting download for ${songs.length} songs...");
-                                                          for (var song
-                                                              in songs) {
-                                                            context
-                                                                .read<
-                                                                    DownloaderCubit>()
-                                                                .downloadSong(
-                                                                    song,
-                                                                    showSnackbar:
-                                                                        false);
-                                                          }
-                                                        }
-                                                      },
-                                                      icon: Icon(
-                                                        isAlbumDownloaded
-                                                            ? MingCute
-                                                                .check_circle_fill
-                                                            : MingCute
-                                                                .download_2_line,
-                                                        size: 25,
-                                                        color: isAlbumDownloaded
-                                                            ? Default_Theme
-                                                                .accentColor2
-                                                            : Default_Theme
-                                                                .primaryColor1,
-                                                      ),
-                                                    ),
-                                                  );
-                                                }),
-                                              ),
-                                            ],
-                                          ),
+                                          child: ConstrainedBox(
+                                              constraints: const BoxConstraints(
+                                                  maxWidth: 300),
+                                              child: Text(
+                                                // Just placeholder or empty?
+                                                "", // Removing actions from here.
+                                                style: TextStyle(fontSize: 0),
+                                              )),
                                         ),
                                       )
                                     ],
@@ -324,21 +180,111 @@ class _AlbumViewState extends State<AlbumView> {
                       left: 16,
                       right: 16,
                       bottom: 8,
+                      top: 10,
                     ),
-                    child: Text(
-                      widget.album.name,
-                      maxLines: 3,
-                      textAlign: TextAlign.center,
-                      style: Default_Theme.secondoryTextStyleMedium.merge(
-                        TextStyle(
-                          fontSize: 20,
-                          color: Default_Theme.primaryColor1
-                              .withValues(alpha: 0.8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          widget.album.name,
+                          maxLines: 3,
+                          textAlign: TextAlign.center,
+                          style: Default_Theme.secondoryTextStyleMedium.merge(
+                            TextStyle(
+                              fontSize: 20,
+                              color: Default_Theme.primaryColor1
+                                  .withValues(alpha: 0.8),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
+                BlocBuilder<DownloaderCubit, DownloaderState>(
+                    builder: (context, downloaderState) {
+                  final songs = state.album.songs;
+                  bool isAlbumDownloaded = false;
+                  if (songs.isNotEmpty) {
+                    isAlbumDownloaded = songs.every((song) =>
+                        downloaderState.downloaded.any((d) => d.id == song.id));
+                  }
+
+                  return SliverPersistentHeader(
+                    pinned: true,
+                    delegate: StickyActionBarDelegate(
+                      isLiked: state.isSavedToCollections,
+                      isDownloaded: isAlbumDownloaded,
+                      onPlay: () {
+                        if (context
+                                .read<BloomeePlayerCubit>()
+                                .bloomeePlayer
+                                .queueTitle
+                                .value !=
+                            widget.album.name) {
+                          context
+                              .read<BloomeePlayerCubit>()
+                              .bloomeePlayer
+                              .loadPlaylist(state.album.playlist,
+                                  doPlay: true, idx: 0);
+                        } else if (!context
+                            .read<BloomeePlayerCubit>()
+                            .bloomeePlayer
+                            .audioPlayer
+                            .playing) {
+                          context
+                              .read<BloomeePlayerCubit>()
+                              .bloomeePlayer
+                              .play();
+                        }
+                      },
+                      onLike: () {
+                        albumCubit.addToSavedCollections();
+                      },
+                      onDownload: () {
+                        if (isAlbumDownloaded) {
+                          SnackbarService.showMessage(
+                              "Album already downloaded");
+                          return;
+                        }
+                        if (songs.isNotEmpty) {
+                          SnackbarService.showMessage(
+                              "Starting download for ${songs.length} songs...");
+                          for (var song in songs) {
+                            context
+                                .read<DownloaderCubit>()
+                                .downloadSong(song, showSnackbar: false);
+                          }
+                        }
+                      },
+                      onShare: () async {
+                        SnackbarService.showMessage("Preparing share...");
+                        if (state.album.sourceURL.isNotEmpty) {
+                          Share.share(
+                              "Check out this album: ${state.album.name} on Bloomee! ${state.album.sourceURL}");
+                        } else {
+                          SnackbarService.showMessage("No URL to share");
+                        }
+                      },
+                      onAddToPlaylist: () {
+                        if (songs.isNotEmpty) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (ctx) => AddToPlaylistFromListScreen(
+                                  mediaItems: songs),
+                            ),
+                          );
+                        } else {
+                          SnackbarService.showMessage("No songs to add");
+                        }
+                      },
+                      onExternalLink: () {
+                        launchUrl(Uri.parse(state.album.sourceURL),
+                            mode: LaunchMode.externalApplication);
+                      },
+                    ),
+                  );
+                }),
                 (state is AlbumLoaded ||
                         (state.album.songs.isNotEmpty &&
                             state is! AlbumLoading))
