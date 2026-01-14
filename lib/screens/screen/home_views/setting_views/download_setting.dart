@@ -36,10 +36,10 @@ Future<bool> storagePermission() async {
       havePermission = request.isGranted;
     }
   } else if (sdkInt >= 29) {
-     // Android 10 (Q) - scoped storage, typically just need standard storage or specialized logic
-     // allowing standard storage permission flow for now
-     final status = await Permission.storage.request();
-     havePermission = status.isGranted;
+    // Android 10 (Q) - scoped storage, typically just need standard storage or specialized logic
+    // allowing standard storage permission flow for now
+    final status = await Permission.storage.request();
+    havePermission = status.isGranted;
   } else {
     // Android 9 and below
     final status = await Permission.storage.request();
@@ -53,7 +53,6 @@ Future<bool> storagePermission() async {
 
   return havePermission;
 }
-
 
 class _MoveProgressDialog extends StatefulWidget {
   final String newPath;
@@ -102,39 +101,42 @@ class _MoveProgressDialogState extends State<_MoveProgressDialog> {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       title: const Text("Moving Downloads"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 10),
-          LinearProgressIndicator(
-            value: progress,
-            minHeight: 8,
-            borderRadius: BorderRadius.circular(4),
-            backgroundColor: Default_Theme.primaryColor1.withOpacity(0.2),
-            valueColor: const AlwaysStoppedAnimation<Color>(
-              Default_Theme.primaryColor1,
-            ),
-          ),
-          const SizedBox(height: 15),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "${(progress * 100).toInt()}%",
-                style: const TextStyle(fontWeight: FontWeight.bold),
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(4),
+              backgroundColor: Default_Theme.primaryColor1.withOpacity(0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Default_Theme.primaryColor1,
               ),
-              Text("$currentCount / $totalCount"),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Text(
-            currentFile,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-        ],
+            ),
+            const SizedBox(height: 15),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "${(progress * 100).toInt()}%",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text("$currentCount / $totalCount"),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              currentFile,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -152,9 +154,6 @@ class _DownloadSettingsState extends State<DownloadSettings> {
       if (value != null) {
         if (!mounted) return;
         final currentPath = context.read<SettingsCubit>().state.downPath;
-        debugPrint(
-            "==========Moving downloads from: $currentPath to: $value=========");
-
         if (currentPath != value) {
           showDialog(
             context: context,
@@ -183,8 +182,6 @@ class _DownloadSettingsState extends State<DownloadSettings> {
                     ).then((_) {
                       // When dialog closes (operation finished)
                       if (context.mounted) {
-                        debugPrint(
-                            "==========Moved downloads to: $value=========");
                         context.read<SettingsCubit>().setDownPath(value);
                       }
                     });
@@ -195,8 +192,8 @@ class _DownloadSettingsState extends State<DownloadSettings> {
             ),
           );
         } else {
-            // Even if path is same, we might want to ensure it's set
-            context.read<SettingsCubit>().setDownPath(value);
+          // Even if path is same, we might want to ensure it's set
+          context.read<SettingsCubit>().setDownPath(value);
         }
       }
     });
@@ -291,7 +288,7 @@ class _DownloadSettingsState extends State<DownloadSettings> {
                   },
                 ),
                 onTap: () async {
-                   await changeDownloadPath();
+                  await changeDownloadPath();
                 },
               ),
             ],

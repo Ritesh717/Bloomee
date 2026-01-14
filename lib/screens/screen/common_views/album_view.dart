@@ -8,6 +8,7 @@ import 'package:Bloomee/screens/widgets/song_tile.dart';
 import 'package:Bloomee/theme_data/default.dart';
 import 'package:Bloomee/utils/imgurl_formator.dart';
 import 'package:Bloomee/utils/load_Image.dart';
+import 'package:Bloomee/blocs/downloader/cubit/downloader_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:icons_plus/icons_plus.dart';
@@ -233,6 +234,74 @@ class _AlbumViewState extends State<AlbumView> {
                                                     size: 25,
                                                   ),
                                                 ),
+                                              ),
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    left: 5),
+                                                child: BlocBuilder<
+                                                        DownloaderCubit,
+                                                        DownloaderState>(
+                                                    builder: (context,
+                                                        downloaderState) {
+                                                  final songs =
+                                                      state.album.songs;
+                                                  bool isAlbumDownloaded =
+                                                      false;
+                                                  if (songs.isNotEmpty) {
+                                                    isAlbumDownloaded =
+                                                        songs.every((song) =>
+                                                            downloaderState
+                                                                .downloaded
+                                                                .any((d) =>
+                                                                    d.id ==
+                                                                    song.id));
+                                                  }
+
+                                                  return Tooltip(
+                                                    message: isAlbumDownloaded
+                                                        ? "Album Downloaded"
+                                                        : "Download All",
+                                                    child: IconButton(
+                                                      onPressed: () {
+                                                        if (isAlbumDownloaded) {
+                                                          SnackbarService
+                                                              .showMessage(
+                                                                  "Album already downloaded");
+                                                          return;
+                                                        }
+
+                                                        if (songs.isNotEmpty) {
+                                                          SnackbarService
+                                                              .showMessage(
+                                                                  "Starting download for ${songs.length} songs...");
+                                                          for (var song
+                                                              in songs) {
+                                                            context
+                                                                .read<
+                                                                    DownloaderCubit>()
+                                                                .downloadSong(
+                                                                    song,
+                                                                    showSnackbar:
+                                                                        false);
+                                                          }
+                                                        }
+                                                      },
+                                                      icon: Icon(
+                                                        isAlbumDownloaded
+                                                            ? MingCute
+                                                                .check_circle_fill
+                                                            : MingCute
+                                                                .download_2_line,
+                                                        size: 25,
+                                                        color: isAlbumDownloaded
+                                                            ? Default_Theme
+                                                                .accentColor2
+                                                            : Default_Theme
+                                                                .primaryColor1,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }),
                                               ),
                                             ],
                                           ),

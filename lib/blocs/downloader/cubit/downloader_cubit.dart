@@ -43,13 +43,13 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     // Check if a custom download path is set in settings
     final customPath =
         await BloomeeDBService.getSettingStr(GlobalStrConsts.downPathSetting);
-    
+
     if (customPath != null && customPath.isNotEmpty) {
       final customDir = Directory(customPath);
       // On Android, if we have permission, we can use this path.
       // We assume permission is checked/granted at selection time or runtime.
       if (await customDir.exists()) {
-         return customDir;
+        return customDir;
       } else {
         // Try creating it if it doesn't exist (optional, but good practice)
         try {
@@ -68,7 +68,7 @@ class DownloaderCubit extends Cubit<DownloaderState> {
           await getApplicationDocumentsDirectory();
       return directory;
     }
-    
+
     // Desktop default
     return await getApplicationDocumentsDirectory();
   }
@@ -130,8 +130,10 @@ class DownloaderCubit extends Cubit<DownloaderState> {
   /// --- NEW: Handles saving metadata to the database after completion ---
   void _onDownloadComplete(DownloadTask task) async {
     log("Downloaded ${task.fileName}", name: "DownloaderCubit");
-    SnackbarService.showMessage(
-        "Downloaded ${task.audioMetadata?.title ?? task.fileName}");
+    if (task.showSnackbar) {
+      SnackbarService.showMessage(
+          "Downloaded ${task.audioMetadata?.title ?? task.fileName}");
+    }
 
     // Only save to DB if it was a song with a MediaItemModel
     final downloadDirectory = path.dirname(task.targetPath);
@@ -153,8 +155,10 @@ class DownloaderCubit extends Cubit<DownloaderState> {
 
   void _onDownloadFailed(DownloadTask task) {
     log("Failed to download ${task.fileName}", name: "DownloaderCubit");
-    SnackbarService.showMessage(
-        "Failed to download ${task.audioMetadata?.title ?? task.fileName}");
+    if (task.showSnackbar) {
+      SnackbarService.showMessage(
+          "Failed to download ${task.audioMetadata?.title ?? task.fileName}");
+    }
 
     // Remove the task from the active downloads list
     _activeDownloads
@@ -330,6 +334,7 @@ class DownloaderCubit extends Cubit<DownloaderState> {
         maxRetries: 3,
         audioMetadata: metadata,
         song: song,
+        showSnackbar: showSnackbar,
       );
 
       if (showSnackbar)

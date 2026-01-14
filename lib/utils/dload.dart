@@ -48,6 +48,7 @@ class DownloadTask {
   final int maxRetries;
   final MediaItemModel song;
   final AudioMetadata? audioMetadata;
+  final bool showSnackbar;
   final StreamController<DownloadStatus> statusController =
       StreamController<DownloadStatus>.broadcast();
 
@@ -59,9 +60,21 @@ class DownloadTask {
     required this.maxRetries,
     required this.song,
     this.audioMetadata,
+    this.showSnackbar = true,
   }) {
     statusController.add(
         const DownloadStatus(state: DownloadState.queued, message: "In Queue"));
+  }
+
+  factory DownloadTask.empty() {
+    return DownloadTask(
+      url: "",
+      originalUrl: "",
+      fileName: "",
+      targetPath: "",
+      maxRetries: 0,
+      song: MediaItemModel(id: "", title: ""),
+    );
   }
 
   Stream<DownloadStatus> get statusStream => statusController.stream;
@@ -86,6 +99,7 @@ class DownloadEngine {
     required MediaItemModel song,
     int maxRetries = 3,
     AudioMetadata? audioMetadata,
+    bool showSnackbar = true,
   }) {
     final task = DownloadTask(
       url: url,
@@ -95,6 +109,7 @@ class DownloadEngine {
       maxRetries: maxRetries,
       audioMetadata: audioMetadata,
       song: song,
+      showSnackbar: showSnackbar,
     );
     _queue.add(task);
     onTaskAdded?.call(task);
