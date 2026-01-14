@@ -144,17 +144,36 @@ Future<ChartModel> getBillboardChart(ChartURL url) async {
       List<ChartItemModel> chartItems = [];
       for (var item in songs) {
         var row = item.querySelector('ul.o-chart-results-list-row');
-        var attributes = row!.querySelectorAll('li');
-        // var rank = row.attributes['data-detail-target'];
-        var img = attributes[1].querySelector('img');
-        var title = attributes[3].querySelector('h3.c-title');
-        var label = attributes[3].querySelector('span.c-label');
-        var ttl = title?.text.trim();
+        if (row == null) continue; // Safety check
+
+        var attributes = row.querySelectorAll('li');
+        if (attributes.length < 4) continue; // Safety check for array bounds
+
+        // Robust parsing for image and title
+        Element? img;
+        Element? title;
+        Element? label;
+        
+        // Try to find elements safely
+        try {
+           img = attributes.length > 1 ? attributes[1].querySelector('img') : null;
+           // Title often in 4th element (index 3), but structure varies.
+           var infoContainer = attributes.length > 3 ? attributes[3] : attributes.last;
+           title = infoContainer.querySelector('h3.c-title');
+           label = infoContainer.querySelector('span.c-label');
+        } catch (e) {
+           continue; // Skip malformed item
+        }
+
+        var ttl = title?.text.trim() ?? "Unknown Title";
+        if (ttl.isEmpty) continue; // Skip empty items
+
         var lbl = label?.text.trim();
 
         String imgURL =
             img?.attributes['data-lazy-src'] ?? img?.attributes['src'] ?? '';
         if (imgURL.isEmpty || imgURL.contains("lazyload-fallback.gif")) {
+          // Fallback image
           imgURL =
               "https://www.billboard.com/wp-content/themes/vip/pmc-billboard-2021/assets/app/icons/icon-512x512.png";
         } else {

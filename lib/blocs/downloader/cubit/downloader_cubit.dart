@@ -34,25 +34,44 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     required this.libraryItemsCubit,
   }) : super(DownloaderInitial()) {
     _downloadEngine.onTaskAdded = _handleNewTask;
-    MetadataGod.initialize();
     _setupLibrarySubscription();
     _loadDownloadedSongs();
   }
 
   Future<Directory> _getDownloadDirectory() async {
+    // Check for custom path setting FIRST
+    final path = await BloomeeDBService.getSettingStr(GlobalStrConsts.downPathSetting);
+    if (path != null) {
+      final dir = Directory(path);
+      if (await dir.exists()) {
+        if (Platform.isAndroid) {
+           // Verify we can actually write to this directory
+           try {
+             final testFile = File('${dir.path}/test_permission.tmp');
+             await testFile.writeAsString('test');
+             await testFile.delete();
+             return dir;
+           } catch (e) {
+             log("Custom path not writable: $e", name: "DownloaderCubit");
+             SnackbarService.showMessage("⚠️ Custom folder not writable. Saving to App Storage.");
+              // Fallthrough to default
+           }
+        } else {
+           return dir;
+        }
+      } else {
+         log("Custom path does not exist", name: "DownloaderCubit");
+         SnackbarService.showMessage("⚠️ Custom folder not found. Saving to App Storage.");
+      }
+    }
+
     if (Platform.isAndroid || Platform.isIOS) {
       // For Android and iOS, use the internal storage's downloads directory
       final directory = (await getDownloadsDirectory()) ??
           await getApplicationDocumentsDirectory();
       return directory;
     }
-    // For other platforms, use the application documents directory by default
-    // This can be adjusted based on your requirements
-    final path =
-        await BloomeeDBService.getSettingStr(GlobalStrConsts.downPathSetting);
-    if (path != null) {
-      return Directory(path);
-    }
+    
     return await getApplicationDocumentsDirectory();
   }
 
@@ -114,7 +133,7 @@ class DownloaderCubit extends Cubit<DownloaderState> {
   void _onDownloadComplete(DownloadTask task) async {
     log("Downloaded ${task.fileName}", name: "DownloaderCubit");
     SnackbarService.showMessage(
-        "Downloaded ${task.audioMetadata?.title ?? task.fileName}");
+        "Downloaded ${task.audioMetadata?.title ?? task.fileName}\nSaved to: ${task.targetPath}");
 
     // Only save to DB if it was a song with a MediaItemModel
     final downloadDirectory = path.dirname(task.targetPath);

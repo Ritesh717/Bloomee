@@ -2,8 +2,10 @@ import 'package:Bloomee/screens/widgets/global_footer.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:Bloomee/routes_and_consts/global_str_consts.dart';
+import 'package:Bloomee/routes_and_consts/app_config.dart';
 import 'package:Bloomee/screens/screen/common_views/add_to_playlist_screen.dart';
 import 'package:Bloomee/screens/screen/player_screen.dart';
+import 'package:Bloomee/screens/screen/player_screen_v2.dart';
 import 'package:Bloomee/screens/screen/explore_screen.dart';
 import 'package:Bloomee/screens/screen/library_screen.dart';
 import 'package:Bloomee/screens/screen/library_views/import_media_view.dart';
@@ -24,8 +26,15 @@ class GlobalRoutes {
         path: "/MusicPlayer",
         parentNavigatorKey: globalRouterKey,
         pageBuilder: (context, state) {
+          print('🔧 AppConfig.useNewPlayerUI = ${AppConfig.useNewPlayerUI}');
+          final playerWidget = AppConfig.useNewPlayerUI 
+              ? AudioPlayerViewV2()  // Removed const
+              : AudioPlayerView();    // Removed const
+          print('🎯 Selected player: ${playerWidget.runtimeType}');
+          
           return CustomTransitionPage(
-            child: const AudioPlayerView(),
+            // Use environment variable to toggle between old and new player
+            child: playerWidget,
             transitionDuration: const Duration(milliseconds: 100),
             reverseTransitionDuration: const Duration(milliseconds: 100),
             transitionsBuilder:

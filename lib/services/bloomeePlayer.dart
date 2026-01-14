@@ -68,7 +68,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _isDisposed = false;
     audioPlayer = AudioPlayer(
       handleInterruptions: true,
-      androidApplyAudioAttributes: true,
+      androidApplyAudioAttributes: false, // Fix for glitches/speedup on some devices
       handleAudioSessionActivation: true,
     );
   }
@@ -328,11 +328,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   }
 
   void setLoopMode(LoopMode loopMode) {
-    if (loopMode == LoopMode.one) {
-      audioPlayer.setLoopMode(LoopMode.one);
-    } else {
-      audioPlayer.setLoopMode(LoopMode.off);
-    }
+    audioPlayer.setLoopMode(loopMode);
     this.loopMode.add(loopMode);
   }
 

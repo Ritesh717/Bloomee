@@ -37,6 +37,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_handler/share_handler.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:metadata_god/metadata_god.dart';
 import 'blocs/mediaPlayer/bloomee_player_cubit.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:Bloomee/services/discord_service.dart';
@@ -135,6 +136,11 @@ Future<void> main() async {
   setHighRefreshRate();
   setupPlayerCubit();
   DiscordService.initialize();
+  try {
+    await MetadataGod.initialize();
+  } catch (e) {
+    debugPrint('Failed to initialize MetadataGod: $e');
+  }
   runApp(const MyApp());
 }
 

@@ -65,8 +65,11 @@ class AudioTagger {
       );
       print("Successfully wrote metadata to $filePath");
     } catch (e) {
-      print(
-          "Failed to write metadata for $filePath. This is a non-fatal error. Error: $e");
+      if (e.toString().contains("flutter_rust_bridge")) {
+        print("Metadata error: Native library not initialized. Skipping tags (Song audio is fine).");
+      } else {
+        print("Failed to write metadata for $filePath. Non-fatal error: $e");
+      }
       // Don't rethrow; tagging is an optional enhancement.
     } finally {
       // 4. Clean up the temporary artwork file.

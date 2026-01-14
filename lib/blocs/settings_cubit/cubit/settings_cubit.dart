@@ -129,6 +129,11 @@ class SettingsCubit extends Cubit<SettingsState> {
       }
       emit(state.copyWith(chartMap: Map.from(chartMap)));
     });
+
+
+    BloomeeDBService.getSettingBool(GlobalStrConsts.useNewPlayerUI).then((value) {
+      emit(state.copyWith(useNewPlayerUI: value ?? true));
+    });
   }
 
   void setChartShow(String title, bool value) {
@@ -242,5 +247,9 @@ class SettingsCubit extends Cubit<SettingsState> {
 
     setDownPath(path);
     log("Download path reset to: $path", name: 'SettingsCubit');
+  }
+  void setUseNewPlayerUI(bool value) {
+    BloomeeDBService.putSettingBool(GlobalStrConsts.useNewPlayerUI, value);
+    emit(state.copyWith(useNewPlayerUI: value));
   }
 }

@@ -104,6 +104,27 @@ class PlayerSettings extends StatelessWidget {
                   onChanged: (value) {
                     context.read<SettingsCubit>().setAutoPlay(value);
                   }),
+              SwitchListTile(
+                  value: state.useNewPlayerUI,
+                  title: Text(
+                    "New Player UI (YouTube Style)",
+                    style: const TextStyle(
+                      color: Default_Theme.primaryColor1,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ).merge(Default_Theme.secondoryTextStyle),
+                  ),
+                  subtitle: Text(
+                    "Use the new modern player interface.",
+                    style: TextStyle(
+                      color: Default_Theme.primaryColor1.withValues(alpha: 0.5),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  onChanged: (value) {
+                    context.read<SettingsCubit>().setUseNewPlayerUI(value);
+                  }),
             ],
           );
         },

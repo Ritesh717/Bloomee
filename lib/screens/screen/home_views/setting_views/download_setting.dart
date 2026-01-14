@@ -25,16 +25,17 @@ Future<bool> storagePermission() async {
   final int androidVersion = int.parse(androidInfo.version.release);
   bool havePermission = false;
 
-  if (androidVersion >= 13) {
-    final request = await [
-      Permission.videos,
-      Permission.photos,
-      //..... as needed
-    ].request(); //import 'package:permission_handler/permission_handler.dart';
-
-    havePermission =
-        request.values.every((status) => status == PermissionStatus.granted);
+  if (androidVersion >= 11) {
+    // Android 11+ (including 13/14) requires MANAGE_EXTERNAL_STORAGE for "All Files Access"
+    // This is needed to write to arbitrary custom directories.
+    if (await Permission.manageExternalStorage.isGranted) {
+      havePermission = true;
+    } else {
+      final status = await Permission.manageExternalStorage.request();
+      havePermission = status.isGranted;
+    }
   } else {
+    // Android 10 and below
     final status = await Permission.storage.request();
     havePermission = status.isGranted;
   }
@@ -127,9 +128,7 @@ class _DownloadSettingsState extends State<DownloadSettings> {
               SettingTile(
                 title: "Download Folder",
                 subtitle: state.downPath,
-                trailing: Platform.isAndroid
-                    ? null
-                    : IconButton(
+                trailing: IconButton(
                         icon: const Icon(
                           MingCute.refresh_1_line,
                           color: Default_Theme.primaryColor1,
@@ -138,9 +137,7 @@ class _DownloadSettingsState extends State<DownloadSettings> {
                           context.read<SettingsCubit>().resetDownPath();
                         },
                       ),
-                onTap: Platform.isAndroid
-                    ? null
-                    : () async {
+                onTap: () async {
                         if (Platform.isAndroid) {
                           // Check for storage permission
                           final permission = await storagePermission();

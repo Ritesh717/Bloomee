@@ -40,4 +40,5 @@ class GlobalStrConsts {
 
   /// Whether the user has read the changelogs.[eg. v2.11.6+171]
   static const String readChangelogs = "readChangelogs";
+  static const String useNewPlayerUI = "useNewPlayerUI";
 }

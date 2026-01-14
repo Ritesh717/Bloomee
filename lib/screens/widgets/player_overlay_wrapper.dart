@@ -1,5 +1,8 @@
 import 'package:Bloomee/blocs/player_overlay/player_overlay_cubit.dart';
+import 'package:Bloomee/blocs/settings_cubit/cubit/settings_cubit.dart';
 import 'package:Bloomee/screens/screen/player_screen.dart';
+import 'package:Bloomee/screens/screen/player_screen_v2.dart';
+import 'package:Bloomee/routes_and_consts/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -135,9 +138,15 @@ class _PersistentPlayerView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Material(
-      color: Colors.transparent,
-      child: AudioPlayerView(),
+    return BlocBuilder<SettingsCubit, SettingsState>(
+       builder: (context, state) {
+          return Material(
+            color: Colors.transparent,
+            child: state.useNewPlayerUI
+               ? AudioPlayerViewV2()
+               : AudioPlayerView(),
+          );
+       }
     );
   }
 }
