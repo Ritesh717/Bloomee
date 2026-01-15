@@ -6,7 +6,6 @@ import 'package:Bloomee/utils/imgurl_formator.dart';
 import 'package:Bloomee/utils/load_Image.dart';
 import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
-import 'package:responsive_framework/responsive_framework.dart';
 
 class PlaylistCard extends StatelessWidget {
   final PlaylistOnlModel playlist;
@@ -26,11 +25,10 @@ class PlaylistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       return Padding(
-        padding: const EdgeInsets.only(top: 10, left: 4, right: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: SizedBox(
-          width: ResponsiveBreakpoints.of(context).isMobile
-              ? constraints.maxWidth * 0.45
-              : 220,
+          width: double.infinity,
+          height: 70, // Fixed height for list item
           child: GestureDetector(
             onTap: () {
               Navigator.push(
@@ -42,11 +40,9 @@ class PlaylistCard extends StatelessWidget {
                         )),
               );
             },
-            child: Card(
-              shadowColor: Colors.transparent,
+            child: Container(
               color: Colors.transparent,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
                 children: [
                   Hero(
                     tag: playlist.sourceId,
@@ -58,60 +54,90 @@ class PlaylistCard extends StatelessWidget {
                         setHovering(false);
                       },
                       child: LayoutBuilder(builder: (context, constraints2) {
-                        return Stack(
-                          children: [
-                            SizedBox.square(
-                              dimension: constraints2.maxWidth,
-                              child: LoadImageCached(
-                                imageUrl: formatImgURL(
-                                    playlist.imageURL, ImageQuality.medium),
-                                fit: BoxFit.fitWidth,
-                              ),
-                            ),
-                            ValueListenableBuilder(
-                              valueListenable: hovering,
-                              builder: (context, child, value) {
-                                return Positioned.fill(
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    color: hovering.value
-                                        ? Colors.black.withValues(alpha: 0.5)
-                                        : Colors.transparent,
-                                    child: Center(
-                                      child: AnimatedOpacity(
+                        return AspectRatio(
+                          aspectRatio: 1,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(5),
+                            child: Stack(
+                              children: [
+                                SizedBox.square(
+                                  dimension: constraints2.maxHeight,
+                                  child: LoadImageCached(
+                                    imageUrl: formatImgURL(
+                                        playlist.imageURL, ImageQuality.medium),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                ValueListenableBuilder(
+                                  valueListenable: hovering,
+                                  builder: (context, child, value) {
+                                    return Positioned.fill(
+                                      child: AnimatedContainer(
                                         duration:
                                             const Duration(milliseconds: 200),
-                                        opacity: hovering.value ? 1 : 0,
-                                        child: const Icon(
-                                          MingCute.play_circle_line,
-                                          color: Colors.white,
-                                          size: 50,
+                                        color: hovering.value
+                                            ? Colors.black
+                                                .withValues(alpha: 0.5)
+                                            : Colors.transparent,
+                                        child: Center(
+                                          child: AnimatedOpacity(
+                                            duration: const Duration(
+                                                milliseconds: 200),
+                                            opacity: hovering.value ? 1 : 0,
+                                            child: const Icon(
+                                              MingCute.play_circle_line,
+                                              color: Colors.white,
+                                              size: 30,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                );
-                              },
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         );
                       }),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      top: 8,
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          playlist.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Default_Theme.secondoryTextStyleMedium
+                              .merge(const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Default_Theme.primaryColor1,
+                          )),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Playlist",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Default_Theme.secondoryTextStyleMedium
+                              .merge(TextStyle(
+                            fontSize: 13,
+                            color: Default_Theme.primaryColor1
+                                .withValues(alpha: 0.7),
+                          )),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      playlist.name,
-                      maxLines: 2,
-                      textAlign: TextAlign.center,
-                      style: Default_Theme.secondoryTextStyleMedium
-                          .merge(const TextStyle(
-                        fontSize: 14,
-                        color: Default_Theme.primaryColor1,
-                      )),
-                    ),
+                  ),
+                  Icon(
+                    Icons.more_vert_rounded,
+                    color: Default_Theme.primaryColor1.withValues(alpha: 0.5),
+                    size: 20,
                   ),
                 ],
               ),

@@ -195,6 +195,20 @@ class BloomeeDBCubit extends Cubit<MediadbState> {
     return _id;
   }
 
+  Future<void> addMediaItemsToPlaylist(
+      List<MediaItemModel> mediaItems, MediaPlaylistDB mediaPlaylistDB,
+      {bool showSnackbar = true}) async {
+    final mediaItemsDB =
+        mediaItems.map((e) => MediaItem2MediaItemDB(e)).toList();
+    await BloomeeDBService.addMediaItems(
+        mediaItemsDB, mediaPlaylistDB.playlistName);
+
+    if (showSnackbar) {
+      SnackbarService.showMessage(
+          "${mediaItems.length} songs added to ${mediaPlaylistDB.playlistName}!!");
+    }
+  }
+
   Future<bool?> getSettingBool(String key) async {
     return await BloomeeDBService.getSettingBool(key);
   }

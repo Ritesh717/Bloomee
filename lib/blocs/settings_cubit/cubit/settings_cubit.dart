@@ -129,6 +129,25 @@ class SettingsCubit extends Cubit<SettingsState> {
       }
       emit(state.copyWith(chartMap: Map.from(chartMap)));
     });
+
+    BloomeeDBService.getSettingStr(GlobalStrConsts.contentLanguages)
+        .then((value) {
+      if (value != null) {
+        try {
+          List<String> langs = List<String>.from(jsonDecode(value));
+          emit(state.copyWith(contentLanguages: langs));
+        } catch (e) {
+          emit(state.copyWith(contentLanguages: ["Hindi"]));
+        }
+      } else {
+        emit(state.copyWith(contentLanguages: ["Hindi"]));
+      }
+    });
+
+    BloomeeDBService.getSettingStr(GlobalStrConsts.displayLanguage)
+        .then((value) {
+      emit(state.copyWith(displayLanguage: value ?? "English"));
+    });
   }
 
   void setChartShow(String title, bool value) {
@@ -188,8 +207,11 @@ class SettingsCubit extends Cubit<SettingsState> {
   }
 
   void setDownPath(String value) {
+    log("setDownPath called with: $value", name: 'SettingsCubit');
     BloomeeDBService.putSettingStr(GlobalStrConsts.downPathSetting, value);
     emit(state.copyWith(downPath: value));
+    log("setDownPath emitted state with: ${state.downPath}",
+        name: 'SettingsCubit');
   }
 
   void setDownQuality(String value) {
@@ -242,5 +264,17 @@ class SettingsCubit extends Cubit<SettingsState> {
 
     setDownPath(path);
     log("Download path reset to: $path", name: 'SettingsCubit');
+  }
+
+  Future<void> setContentLanguages(List<String> value) async {
+    await BloomeeDBService.putSettingStr(
+        GlobalStrConsts.contentLanguages, jsonEncode(value));
+    emit(state.copyWith(contentLanguages: value));
+  }
+
+  Future<void> setDisplayLanguage(String value) async {
+    await BloomeeDBService.putSettingStr(
+        GlobalStrConsts.displayLanguage, value);
+    emit(state.copyWith(displayLanguage: value));
   }
 }

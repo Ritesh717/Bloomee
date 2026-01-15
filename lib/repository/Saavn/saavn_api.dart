@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:developer';
 import 'package:http/http.dart';
 import 'package:Bloomee/repository/Saavn/format.dart';
+import 'package:Bloomee/services/db/bloomee_db_service.dart';
+import 'package:Bloomee/routes_and_consts/global_str_consts.dart';
 
 class SaavnAPI {
   Map<String, String> headers = {};
@@ -34,14 +36,26 @@ class SaavnAPI {
       param.replaceAll('&api_version=4', '');
     }
     url = Uri.parse('https://$baseUrl$apiStr&$param');
-    final String languageHeader = 'L=Hindi';
+    String langsJson = await BloomeeDBService.getSettingStr(
+            GlobalStrConsts.contentLanguages) ??
+        '["Hindi"]';
+    List<String> langs = [];
+    try {
+      langs = List<String>.from(jsonDecode(langsJson));
+    } catch (e) {
+      langs = ["Hindi"];
+    }
+    final String languageHeader = 'L=${langs.join(',')}';
     headers = {
       'cookie': languageHeader,
       'Accept': 'application/json, text/plain, */*',
       'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
     };
-    return get(url, headers: headers).onError((error, stackTrace) {
+    log('Requesting Saavn with Language Header: $languageHeader',
+        name: 'SaavnAPI');
+    final Response response =
+        await get(url, headers: headers).onError((error, stackTrace) {
       return Response(
         {
           'status': 'failure',
@@ -50,6 +64,7 @@ class SaavnAPI {
         404,
       );
     });
+    return response;
   }
 
   Future<Map> getRelated(String id) async {

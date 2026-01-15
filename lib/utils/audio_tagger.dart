@@ -26,10 +26,23 @@ class AudioMetadata {
 
 /// A dedicated module for writing metadata to audio files.
 class AudioTagger {
+  static bool _isInitialized = false;
+
+  /// Call this after MetadataGod.initialize() succeeds
+  static void markInitialized() {
+    _isInitialized = true;
+  }
+
   /// Writes the provided metadata to the audio file at [filePath].
   /// This is a non-critical operation; it will log errors but not throw them,
   /// ensuring a download is still considered successful even if tagging fails.
   static Future<void> writeTags(String filePath, AudioMetadata metadata) async {
+    if (!_isInitialized) {
+      print(
+          "AudioTagger: Skipping metadata write - MetadataGod not initialized");
+      return;
+    }
+
     File? tempArtworkFile;
     try {
       // 1. Download the artwork to a temporary file.
@@ -77,6 +90,52 @@ class AudioTagger {
       } catch (e) {
         print("Error deleting temporary artwork file: $e");
       }
+    }
+  }
+
+  /// Reads metadata from the audio file at [filePath].
+  /// Returns [AudioMetadata] if successful, or null if reading fails.
+  /// If artwork is found, it saves it to the application documents directory and returns the path.
+  static Future<AudioMetadata?> readTags(String filePath) async {
+    try {
+      final metadata = await MetadataGod.readMetadata(file: filePath);
+      // if (metadata == null) return null; // Removed as per lint
+
+      String artworkUrl = "";
+      // Save artwork to file if present
+      if (metadata.picture != null) {
+        try {
+          final appDir = await getApplicationDocumentsDirectory();
+          final artworkDir = Directory(path.join(appDir.path, 'artworks'));
+          if (!await artworkDir.exists()) {
+            await artworkDir.create(recursive: true);
+          }
+
+          final fileName = path.basenameWithoutExtension(filePath);
+          // Use a safe filename for the artwork
+          final safeFileName = fileName.replaceAll(RegExp(r'[^\w\s\.-]'), '');
+          final artworkFile =
+              File(path.join(artworkDir.path, '$safeFileName.jpg'));
+
+          await artworkFile.writeAsBytes(metadata.picture!.data);
+          artworkUrl = artworkFile.path;
+        } catch (e) {
+          print("Failed to save extracted artwork: $e");
+        }
+      }
+
+      return AudioMetadata(
+        title: metadata.title ?? path.basenameWithoutExtension(filePath),
+        artist: metadata.artist ?? "Unknown Artist",
+        album: metadata.album ?? "Unknown Album",
+        artworkUrl: artworkUrl,
+        duration: metadata.durationMs != null
+            ? Duration(milliseconds: metadata.durationMs!.toInt())
+            : null,
+      );
+    } catch (e) {
+      print("Failed to read metadata from $filePath: $e");
+      return null;
     }
   }
 }

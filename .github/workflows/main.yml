@@ -1,9 +1,9 @@
 name: "Build & Release"
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    branches: main
-    
 
 jobs:
     build:
@@ -37,19 +37,29 @@ jobs:
                   echo "VERSION=$ver" >> $env:GITHUB_ENV
 
             - name: Create keystore file
+              shell: powershell
               run: |
-                  $b64 = "${{ secrets.KEY_STORE }}"
+                  # Use single-quoted string to avoid breaking PowerShell if secret contains double quotes
+                  $b64 = '${{ secrets.KEY_STORE }}'
+                  if (-not $b64) {
+                    Write-Error 'KEY_STORE repository secret is not set. Add it at Settings -> Secrets and variables -> Actions -> New repository secret (name: KEY_STORE, value: base64-encoded keystore)'
+                    exit 1
+                  }
                   $filename = "./android/bloomee.jks"
                   $bytes = [Convert]::FromBase64String($b64)
                   [IO.File]::WriteAllBytes($filename, $bytes)
-              # run: echo "${{ secrets.KEY_STORE }}" | base64 --decode > ./android/bloomee.jks
-            
+
             - name: Create Keystore properties
+              shell: powershell
               run: |
-                  echo keyPassword=\${{ secrets.KEY_PASSWORD }} > ./android/key.properties
-                  echo storePassword=\${{ secrets.STORE_PASSWORD }} >> ./android/key.properties
-                  echo keyAlias=\${{ secrets.KEY_ALIAS }} >> ./android/key.properties
-            
+                  # Write properties safely using Out-File to avoid quoting/parsing issues
+                  $lines = @(
+                    "keyPassword=${{ secrets.KEY_PASSWORD }}",
+                    "storePassword=${{ secrets.STORE_PASSWORD }}",
+                    "keyAlias=${{ secrets.KEY_ALIAS }}"
+                  )
+                  $lines | Out-File -FilePath ./android/key.properties -Encoding UTF8
+
             - name: Build App files
               run: flutter build apk --release --split-per-abi --build-number ${{github.run_number}}
 
@@ -62,15 +72,13 @@ jobs:
                   & "$($buildToolsDir.FullName)\apksigner.bat" verify build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
                   & "$($buildToolsDir.FullName)\apksigner.bat" verify build/app/outputs/flutter-apk/app-x86_64-release.apk
 
-
             - name: Rename APK file
               shell: powershell
               run: |
                   Rename-Item -Path "build/app/outputs/flutter-apk/app-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_universal.apk"
-                  Rename-Item -Path "build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_armeabi-v7a.apk"
+                  Rename-Item -Path "build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_armeabi-v7.apk"
                   Rename-Item -Path "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_arm64-v8a.apk"
                   Rename-Item -Path "build/app/outputs/flutter-apk/app-x86_64-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_x86_64.apk"
-
 
             - name: Build Windows App
               run: flutter build windows --release --build-number ${{github.run_number}}
@@ -80,7 +88,7 @@ jobs:
 
             - name: Rename file
               run: Rename-Item -Path "build/windows/x64/runner/Release/bloomee.exe" -NewName "Bloomee.exe"
-           
+             
             - name: ZIP build
               run: Compress-Archive -Path build/windows/x64/runner/Release/* -Destination  build/windows/x64/bloomee_tunes_windows_x64_v${{ env.VERSION }}+${{github.run_number}}.zip
             
@@ -109,5 +117,3 @@ jobs:
                 tag: v${{ env.VERSION }}+${{github.run_number}}
                 token: ${{secrets.SECRET_KEY}}
                 prerelease: true
-
-    

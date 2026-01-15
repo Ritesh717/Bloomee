@@ -122,6 +122,15 @@ class LibraryItemsCubit extends Cubit<LibraryItemsState> {
     }
   }
 
+  Future<void> addMultipleToPlaylist(
+      List<MediaItemModel> mediaItems, MediaPlaylistDB mediaPlaylistDB,
+      {bool showSnackbar = true}) async {
+    if (mediaPlaylistDB.playlistName != "Null") {
+      await bloomeeDBCubit.addMediaItemsToPlaylist(mediaItems, mediaPlaylistDB,
+          showSnackbar: showSnackbar);
+    }
+  }
+
   void removeFromPlaylist(
       MediaItemModel mediaItem, MediaPlaylistDB mediaPlaylistDB,
       {bool showSnackbar = true}) {

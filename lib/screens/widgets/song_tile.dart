@@ -1,7 +1,6 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'package:Bloomee/screens/screen/common_views/song_info_screen.dart';
 import 'package:Bloomee/screens/widgets/snackbar.dart';
-import 'package:Bloomee/services/db/bloomee_db_service.dart';
 import 'package:Bloomee/utils/imgurl_formator.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +12,8 @@ import 'package:Bloomee/blocs/mediaPlayer/bloomee_player_cubit.dart';
 import 'package:Bloomee/model/songModel.dart';
 import 'package:Bloomee/theme_data/default.dart';
 import 'package:Bloomee/utils/load_Image.dart';
+import 'package:Bloomee/blocs/downloader/cubit/downloader_cubit.dart';
+import 'package:Bloomee/utils/dload.dart';
 
 // Cached styles to avoid repeated merges
 class _SongCardStyles {
@@ -146,6 +147,7 @@ class SongCardWidget extends StatelessWidget {
                   song: song,
                   onInfoTap: onInfoTap,
                 ),
+              _DownloadStatusButton(song: song), // Always show download button
               if (delDownBtn)
                 _DeleteButton(
                   song: song,
@@ -163,8 +165,91 @@ class SongCardWidget extends StatelessWidget {
       ),
     );
   }
+}
 
-  // Removed _buildActionButtons - inlined for better performance
+class _DownloadStatusButton extends StatelessWidget {
+  final MediaItemModel song;
+
+  const _DownloadStatusButton({required this.song});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<DownloaderCubit, DownloaderState>(
+      builder: (context, state) {
+        Widget content;
+
+        // 1. Check if already downloaded
+        final isDownloaded = state.downloaded.any((item) => item.id == song.id);
+        if (isDownloaded) {
+          content = IconButton(
+            icon: const Icon(MingCute.check_circle_fill,
+                color: Default_Theme.accentColor1, size: 26),
+            onPressed: () {
+              // Already downloaded - no action needed
+            },
+          );
+        } else {
+          // 2. Check if currently downloading/queued
+          final activeDownload = state.downloads.firstWhere(
+              (progress) => progress.task.song.id == song.id,
+              orElse: () => DownloadProgress(
+                  task: DownloadTask.empty(),
+                  status: const DownloadStatus(state: DownloadState.failed)));
+
+          if (activeDownload.task.originalUrl.isNotEmpty) {
+            final status = activeDownload.status;
+
+            if (status.state == DownloadState.downloading) {
+              // Show Pie Progress
+              content = Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    value: status.progress,
+                    strokeWidth: 2.0,
+                    color: Default_Theme.accentColor1,
+                    backgroundColor:
+                        Default_Theme.primaryColor2.withValues(alpha: 0.2),
+                  ),
+                ),
+              );
+            } else if (status.state == DownloadState.queued ||
+                status.state == DownloadState.resolving ||
+                status.state == DownloadState.fetchingMetadata) {
+              // Show Queue Clock
+              content = const Center(
+                  child: Icon(MingCute.time_line,
+                      color: Default_Theme.primaryColor1, size: 22));
+            } else {
+              // Fallback for other non-empty states
+              content = const SizedBox.shrink();
+            }
+          } else {
+            // 3. Default: Not Downloaded
+            content = IconButton(
+              icon: const Icon(MingCute.download_2_line,
+                  color: Default_Theme.primaryColor1,
+                  size: 25), // Standard size
+              onPressed: () {
+                context
+                    .read<DownloaderCubit>()
+                    .downloadSong(song, showSnackbar: false);
+              },
+            );
+          }
+        }
+
+        // Return fixed-size container for alignment
+        return SizedBox(
+          width:
+              48, // Standard touch target width (matches standard IconButton with padding)
+          height: 48,
+          child: Center(child: content),
+        );
+      },
+    );
+  }
 }
 
 // Extracted widget for playing indicator with snappy slide animation
@@ -432,25 +517,27 @@ class _DeleteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final downloaderCubit = context.read<DownloaderCubit>();
+
     return Padding(
       padding: const EdgeInsets.only(left: 2),
       child: IconButton(
         icon: _SongCardStyles.deleteIcon,
-        onPressed: _handleDelete,
+        onPressed: () => _handleDelete(downloaderCubit),
       ),
     );
   }
 
-  void _handleDelete() {
+  void _handleDelete(DownloaderCubit downloaderCubit) async {
     try {
       if (playerCubit.bloomeePlayer.currentMedia.id != song.id) {
-        BloomeeDBService.removeDownloadDB(song);
+        await downloaderCubit.deleteDownload(song);
         SnackbarService.showMessage("Removed ${song.title}");
       } else {
         SnackbarService.showMessage("Cannot delete currently playing song");
       }
     } catch (e) {
-      BloomeeDBService.removeDownloadDB(song);
+      await downloaderCubit.deleteDownload(song);
       SnackbarService.showMessage("Removed ${song.title}");
     }
   }

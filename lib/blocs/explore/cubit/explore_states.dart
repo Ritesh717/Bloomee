@@ -89,23 +89,28 @@ class FetchChartInitial extends FetchChartState {
 }
 
 class YTMusicCubitState extends Equatable {
-  final Map<String, List<dynamic>> ytmData;
+  final Map<String, dynamic> ytmData;
+  final bool isLoading;
+
   const YTMusicCubitState({
-    required this.ytmData,
+    this.ytmData = const {},
+    this.isLoading = false,
   });
 
   YTMusicCubitState copyWith({
-    Map<String, List<dynamic>>? ytmData,
+    Map<String, dynamic>? ytmData,
+    bool? isLoading,
   }) {
     return YTMusicCubitState(
       ytmData: ytmData ?? this.ytmData,
+      isLoading: isLoading ?? this.isLoading,
     );
   }
 
   @override
-  List<Object?> get props => [ytmData, ytmData.keys, ytmData.hashCode];
+  List<Object?> get props => [ytmData, isLoading];
 }
 
 class YTMusicCubitInitial extends YTMusicCubitState {
-  YTMusicCubitInitial() : super(ytmData: {});
+  const YTMusicCubitInitial() : super(ytmData: const {}, isLoading: true);
 }

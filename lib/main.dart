@@ -23,6 +23,7 @@ import 'package:Bloomee/services/import_export_service.dart';
 import 'package:Bloomee/utils/external_list_importer.dart';
 import 'package:Bloomee/utils/ticker.dart';
 import 'package:Bloomee/utils/url_checker.dart';
+import 'package:Bloomee/utils/audio_tagger.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -34,6 +35,7 @@ import 'package:Bloomee/screens/screen/library_views/cubit/current_playlist_cubi
 import 'package:Bloomee/screens/screen/library_views/cubit/import_playlist_cubit.dart';
 import 'package:Bloomee/services/db/cubit/bloomee_db_cubit.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
+import 'package:metadata_god/metadata_god.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_handler/share_handler.dart';
 import 'package:responsive_framework/responsive_framework.dart';
@@ -131,10 +133,27 @@ Future<void> main() async {
       windows: true,
     );
   }
-  await initServices();
+  debugPrint("Main: Starting services init...");
+  try {
+    await initServices();
+    debugPrint("Main: Services init done.");
+  } catch (e) {
+    debugPrint("Main: Services init failed: $e");
+  }
+
+  debugPrint("Main: Starting MetadataGod init...");
+  try {
+    await MetadataGod.initialize();
+    AudioTagger.markInitialized();
+    debugPrint("Main: MetadataGod init done.");
+  } catch (e) {
+    debugPrint("Main: MetadataGod init failed: $e");
+  }
+
   setHighRefreshRate();
   setupPlayerCubit();
   DiscordService.initialize();
+  debugPrint("Main: Running App...");
   runApp(const MyApp());
 }
 
@@ -270,6 +289,7 @@ class _MyAppState extends State<MyApp> {
       child: BlocBuilder<BloomeePlayerCubit, BloomeePlayerState>(
         builder: (context, state) {
           if (state is BloomeePlayerInitial) {
+            debugPrint("BloomeePlayerCubit State: $state");
             return const Center(
               child: SizedBox(
                 width: 50,

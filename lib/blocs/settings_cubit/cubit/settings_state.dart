@@ -20,6 +20,8 @@ class SettingsState extends Equatable {
   String countryCode;
   List<bool> sourceEngineSwitches;
   Map chartMap;
+  List<String> contentLanguages;
+  String displayLanguage;
   SettingsState({
     required this.autoUpdateNotify,
     required this.autoSlideCharts,
@@ -39,6 +41,8 @@ class SettingsState extends Equatable {
     required this.sourceEngineSwitches,
     required this.chartMap,
     required this.autoPlay,
+    required this.contentLanguages,
+    required this.displayLanguage,
   });
 
   SettingsState copyWith({
@@ -60,6 +64,8 @@ class SettingsState extends Equatable {
     Map? chartMap,
     bool? autoSaveLyrics,
     bool? autoPlay,
+    List<String>? contentLanguages,
+    String? displayLanguage,
   }) {
     return SettingsState(
       autoUpdateNotify: autoUpdateNotify ?? this.autoUpdateNotify,
@@ -81,6 +87,8 @@ class SettingsState extends Equatable {
       chartMap: Map.from(chartMap ?? this.chartMap),
       autoSaveLyrics: autoSaveLyrics ?? this.autoSaveLyrics,
       autoPlay: autoPlay ?? this.autoPlay,
+      contentLanguages: contentLanguages ?? this.contentLanguages,
+      displayLanguage: displayLanguage ?? this.displayLanguage,
     );
   }
 
@@ -104,6 +112,8 @@ class SettingsState extends Equatable {
         lastFMScrobble,
         autoSaveLyrics,
         autoPlay,
+        contentLanguages,
+        displayLanguage,
       ];
 }
 
@@ -128,5 +138,7 @@ class SettingsInitial extends SettingsState {
           lastFMScrobble: true,
           autoSaveLyrics: false,
           autoPlay: true,
+          contentLanguages: const ["Hindi"],
+          displayLanguage: "English",
         );
 }

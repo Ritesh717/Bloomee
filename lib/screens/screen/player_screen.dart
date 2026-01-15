@@ -1,30 +1,32 @@
 import 'dart:ui';
+import 'package:Bloomee/blocs/add_to_playlist/cubit/add_to_playlist_cubit.dart';
+import 'package:Bloomee/blocs/mediaPlayer/bloomee_player_cubit.dart';
+import 'package:Bloomee/blocs/downloader/cubit/downloader_cubit.dart';
+import 'package:Bloomee/blocs/mini_player/mini_player_bloc.dart';
 import 'package:Bloomee/blocs/player_overlay/player_overlay_cubit.dart';
 import 'package:Bloomee/model/songModel.dart';
+import 'package:Bloomee/screens/screen/common_views/add_to_playlist_screen.dart';
 import 'package:Bloomee/screens/screen/home_views/timer_view.dart';
+import 'package:Bloomee/screens/widgets/up_next_panel.dart';
 import 'package:Bloomee/screens/widgets/gradient_progress_bar.dart';
 import 'package:Bloomee/screens/widgets/more_bottom_sheet.dart';
-import 'package:Bloomee/screens/widgets/up_next_panel.dart';
-import 'package:Bloomee/screens/widgets/volume_slider.dart';
+import 'package:Bloomee/screens/widgets/snackbar.dart';
 import 'package:Bloomee/services/bloomeePlayer.dart';
-import 'package:Bloomee/services/db/bloomee_db_service.dart';
+import 'package:Bloomee/services/db/cubit/bloomee_db_cubit.dart';
+import 'package:Bloomee/services/import_export_service.dart';
+import 'package:Bloomee/theme_data/default.dart';
+import 'package:Bloomee/utils/dload.dart';
 import 'package:Bloomee/utils/imgurl_formator.dart';
+import 'package:Bloomee/utils/load_Image.dart';
+import 'package:Bloomee/utils/pallete_generator.dart';
 import 'package:audio_service/audio_service.dart';
+// import 'package:audio_video_progress_bar/audio_video_progress_bar.dart'; // Removed invalid import
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:icons_plus/icons_plus.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:Bloomee/screens/widgets/like_widget.dart';
-import 'package:Bloomee/screens/widgets/playPause_widget.dart';
-import 'package:Bloomee/services/db/cubit/bloomee_db_cubit.dart';
-import 'package:Bloomee/theme_data/default.dart';
-import 'package:Bloomee/utils/load_Image.dart';
-import 'package:Bloomee/utils/pallete_generator.dart';
+import 'package:just_audio/just_audio.dart'; // For LoopMode
 import 'package:responsive_framework/responsive_framework.dart';
-import 'package:url_launcher/url_launcher_string.dart';
-import '../../blocs/mediaPlayer/bloomee_player_cubit.dart';
-import '../../blocs/mini_player/mini_player_bloc.dart';
-import 'player_views/fullscreen_lyrics_view.dart';
+import 'package:share_plus/share_plus.dart';
 import 'player_views/lyrics_widget.dart';
 
 class AudioPlayerView extends StatefulWidget {
@@ -133,7 +135,7 @@ class _AudioPlayerViewState extends State<AudioPlayerView>
                           constraints: constraints,
                         ),
                         UpNextPanel(
-                          peekHeight: 60.0,
+                          peekHeight: 72.0,
                           parentHeight: constraints.maxHeight,
                           controller: _upNextPanelController,
                         ),
@@ -275,7 +277,7 @@ class CoverImageVolSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
-    return VolumeDragController(
+    return Center(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(25),
         child: StreamBuilder<MediaItem?>(
@@ -333,135 +335,349 @@ class _SongInfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          flex: 7,
-          child: StreamBuilder<MediaItem?>(
-              stream: bloomeePlayerCubit.bloomeePlayer.mediaItem,
-              builder: (context, snapshot) {
-                final mediaItem = snapshot.data;
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      clipBehavior: Clip.antiAlias,
-                      child: SelectableText(
-                        mediaItem?.title ?? "Unknown",
-                        textAlign: TextAlign.start,
-                        style: Default_Theme.secondoryTextStyle.merge(
-                            const TextStyle(
-                                fontSize: 22,
-                                fontFamily: "NotoSans",
-                                fontWeight: FontWeight.w700,
-                                overflow: TextOverflow.ellipsis,
-                                color: Default_Theme.primaryColor1)),
-                      ),
-                    ),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: SelectableText(
-                        mediaItem?.artist ?? "Unknown",
-                        textAlign: TextAlign.start,
-                        style: Default_Theme.secondoryTextStyle.merge(TextStyle(
-                            fontSize: 15,
-                            fontFamily: "NotoSans",
-                            fontWeight: FontWeight.w500,
-                            overflow: TextOverflow.ellipsis,
-                            color: Default_Theme.primaryColor1
-                                .withValues(alpha: 0.7))),
-                      ),
-                    )
-                  ],
-                );
-              }),
+        Row(
+          children: [
+            Expanded(
+              flex: 10,
+              child: StreamBuilder<MediaItem?>(
+                  stream: bloomeePlayerCubit.bloomeePlayer.mediaItem,
+                  builder: (context, snapshot) {
+                    final mediaItem = snapshot.data;
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          clipBehavior: Clip.antiAlias,
+                          child: SelectableText(
+                            mediaItem?.title ?? "Unknown",
+                            textAlign: TextAlign.start,
+                            style: Default_Theme.secondoryTextStyle.merge(
+                                const TextStyle(
+                                    fontSize: 22,
+                                    fontFamily: "NotoSans",
+                                    fontWeight: FontWeight.w700,
+                                    overflow: TextOverflow.ellipsis,
+                                    color: Default_Theme.primaryColor1)),
+                          ),
+                        ),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SelectableText(
+                            mediaItem?.artist ?? "Unknown",
+                            textAlign: TextAlign.start,
+                            style: Default_Theme.secondoryTextStyle.merge(
+                                TextStyle(
+                                    fontSize: 15,
+                                    fontFamily: "NotoSans",
+                                    fontWeight: FontWeight.w500,
+                                    overflow: TextOverflow.ellipsis,
+                                    color: Default_Theme.primaryColor1
+                                        .withValues(alpha: 0.7))),
+                          ),
+                        )
+                      ],
+                    );
+                  }),
+            ),
+          ],
         ),
-        const Spacer(),
-        const _DownloadButton(),
-        const _LikeButton(),
+        const SizedBox(height: 12),
+        const _ActionChipsRow(),
       ],
     );
   }
 }
 
-class _DownloadButton extends StatelessWidget {
-  const _DownloadButton();
+class _ActionChipsRow extends StatelessWidget {
+  const _ActionChipsRow();
 
   @override
   Widget build(BuildContext context) {
-    final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
-    return Tooltip(
-      message: "Available Offline",
-      child: StreamBuilder<MediaItem?>(
-        stream: bloomeePlayerCubit.bloomeePlayer.mediaItem,
-        builder: (context, mediaSnapshot) {
-          final currentMedia = mediaSnapshot.data;
-          if (currentMedia == null) return const SizedBox.shrink();
-          return FutureBuilder(
-            future: BloomeeDBService.getDownloadDB(
-                mediaItem2MediaItemModel(currentMedia)),
-            builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data != null) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 0.0, bottom: 3),
-                  child: IconButton(
-                    iconSize: 25,
-                    icon: Icon(
-                      Icons.offline_pin_rounded,
-                      color: Default_Theme.primaryColor1.withValues(alpha: 0.5),
-                    ),
-                    onPressed: () {
-                      // bloomeePlayerCubit.bloomeePlayer.toggleDownload();
-                    },
-                  ),
-                );
-              } else {
-                return const SizedBox.shrink();
-              }
-            },
-          );
-        },
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            _LikeChip(),
+            SizedBox(width: 8),
+            _DownloadChip(),
+            SizedBox(width: 8),
+            _ShareChip(),
+            SizedBox(width: 8),
+            _AddToPlaylistChip(),
+            SizedBox(width: 8),
+            _SleepTimerChip(),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _LikeButton extends StatelessWidget {
-  const _LikeButton();
+class _LikeChip extends StatefulWidget {
+  const _LikeChip();
+
+  @override
+  State<_LikeChip> createState() => _LikeChipState();
+}
+
+class _LikeChipState extends State<_LikeChip> {
+  bool isLiked = false;
+  String? currentMediaId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initial check will be handled by the stream builder's snapshot or we can do it here if needed
+  }
+
+  Future<void> _checkIfLiked(MediaItem mediaItem) async {
+    if (currentMediaId == mediaItem.id) return; // Avoid redundant checks
+    currentMediaId = mediaItem.id;
+
+    final liked = await context
+        .read<BloomeeDBCubit>()
+        .isLiked(mediaItem2MediaItemModel(mediaItem));
+    if (mounted && currentMediaId == mediaItem.id) {
+      setState(() {
+        isLiked = liked;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
-    return StreamBuilder<ProgressBarStreams>(
-        stream: bloomeePlayerCubit.progressStreams,
-        builder: (context, progressSnapshot) {
-          final isPlaying =
-              progressSnapshot.data?.currentPlayerState.playing ?? false;
-          return FutureBuilder(
-            future: context
-                .read<BloomeeDBCubit>()
-                .isLiked(bloomeePlayerCubit.bloomeePlayer.currentMedia),
-            builder: (context, snapshot) {
-              final isLiked = snapshot.data ?? false;
-              return Padding(
-                padding: const EdgeInsets.only(left: 0.0, bottom: 3),
-                child: LikeBtnWidget(
-                  isPlaying: isPlaying,
-                  isLiked: isLiked,
-                  iconSize: 25,
-                  onLiked: () => context.read<BloomeeDBCubit>().setLike(
-                      bloomeePlayerCubit.bloomeePlayer.currentMedia,
-                      isLiked: true),
-                  onDisliked: () => context.read<BloomeeDBCubit>().setLike(
-                      bloomeePlayerCubit.bloomeePlayer.currentMedia,
-                      isLiked: false),
+
+    return StreamBuilder<MediaItem?>(
+        stream: bloomeePlayerCubit.bloomeePlayer.mediaItem,
+        builder: (context, snapshot) {
+          final mediaItem = snapshot.data;
+
+          if (mediaItem != null) {
+            // Check DB status when song changes
+            _checkIfLiked(mediaItem);
+
+            return ActionChip(
+              avatar: Icon(
+                isLiked ? MingCute.heart_fill : MingCute.heart_line,
+                size: 20,
+                color: Default_Theme.primaryColor1,
+              ),
+              label: const Text('Like'),
+              labelStyle: const TextStyle(
+                color: Default_Theme.primaryColor1,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              backgroundColor:
+                  Default_Theme.primaryColor2.withValues(alpha: 0.1),
+              side: BorderSide.none,
+              shape: const StadiumBorder(),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              labelPadding: const EdgeInsets.only(left: 4, right: 4),
+              onPressed: () {
+                final newState = !isLiked;
+                setState(() {
+                  isLiked = newState;
+                });
+                context.read<BloomeeDBCubit>().setLike(
+                    mediaItem2MediaItemModel(mediaItem),
+                    isLiked: newState);
+              },
+            );
+          }
+          return const SizedBox.shrink();
+        });
+  }
+}
+
+class _DownloadChip extends StatelessWidget {
+  const _DownloadChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
+    return StreamBuilder<MediaItem?>(
+        stream: bloomeePlayerCubit.bloomeePlayer.mediaItem,
+        builder: (context, mediaSnapshot) {
+          final currentMedia = mediaSnapshot.data;
+          if (currentMedia == null) return const SizedBox.shrink();
+
+          return BlocBuilder<DownloaderCubit, DownloaderState>(
+            builder: (context, state) {
+              // Check if currently downloading
+              final activeDownload = state.downloads.firstWhere(
+                  (element) =>
+                      element.task.originalUrl ==
+                      (currentMedia.extras?['perma_url'] ?? ''),
+                  orElse: () => DownloadProgress(
+                      task: DownloadTask.empty(),
+                      status: const DownloadStatus(
+                          state: DownloadState.failed, message: '')));
+
+              bool isDownloading = activeDownload.task.url != "";
+
+              // Check if already downloaded
+              final isDownloaded = state.downloaded.any((element) =>
+                  element.extras?['perma_url'] ==
+                  currentMedia.extras?['perma_url']);
+
+              Widget icon;
+              String label;
+
+              if (isDownloading &&
+                  activeDownload.status.state != DownloadState.failed) {
+                // Downloading state
+                icon = const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Default_Theme.primaryColor1,
+                  ),
+                );
+                label = 'Downloading';
+              } else if (isDownloaded) {
+                // Downloaded state
+                icon = const Icon(
+                    MingCute.check_circle_fill, // Checkmark for downloaded
+                    size: 20,
+                    color: Default_Theme.primaryColor1);
+                label = 'Downloaded';
+              } else {
+                // Not downloaded state
+                icon = const Icon(MingCute.download_2_line,
+                    size: 20, color: Default_Theme.primaryColor1);
+                label = 'Download';
+              }
+
+              return ActionChip(
+                avatar: icon,
+                label: Text(label),
+                labelStyle: const TextStyle(
+                  color: Default_Theme.primaryColor1,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
+                backgroundColor:
+                    Default_Theme.primaryColor2.withValues(alpha: 0.1),
+                side: BorderSide.none,
+                shape: const StadiumBorder(),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                labelPadding: const EdgeInsets.only(left: 4, right: 4),
+                onPressed: () {
+                  if (!isDownloaded && !isDownloading) {
+                    context
+                        .read<DownloaderCubit>()
+                        .downloadSong(mediaItem2MediaItemModel(currentMedia));
+                  }
+                },
               );
             },
           );
         });
+  }
+}
+
+class _ShareChip extends StatelessWidget {
+  const _ShareChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
+    return ActionChip(
+      avatar: const Icon(MingCute.share_forward_fill,
+          size: 20, color: Default_Theme.primaryColor1),
+      label: const Text('Share'),
+      labelStyle: const TextStyle(
+        color: Default_Theme.primaryColor1,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+      backgroundColor: Default_Theme.primaryColor2.withValues(alpha: 0.1),
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      labelPadding: const EdgeInsets.only(left: 4, right: 4),
+      onPressed: () async {
+        final song = bloomeePlayerCubit.bloomeePlayer.currentMedia;
+        SnackbarService.showMessage("Sharing ${song.title}...");
+        final tmpPath = await ImportExportService.exportMediaItem(
+            MediaItem2MediaItemDB(song));
+        if (tmpPath != null) {
+          await Share.shareXFiles([XFile(tmpPath)]);
+        } else {
+          SnackbarService.showMessage("Sharing failed.");
+        }
+      },
+    );
+  }
+}
+
+class _AddToPlaylistChip extends StatelessWidget {
+  const _AddToPlaylistChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
+    return ActionChip(
+      avatar: const Icon(Icons.playlist_add_rounded,
+          size: 20, color: Default_Theme.primaryColor1),
+      label: const Text('Save'),
+      labelStyle: const TextStyle(
+        color: Default_Theme.primaryColor1,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+      backgroundColor: Default_Theme.primaryColor2.withValues(alpha: 0.1),
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      labelPadding: const EdgeInsets.only(left: 4, right: 4),
+      onPressed: () {
+        final song = bloomeePlayerCubit.bloomeePlayer.currentMedia;
+        context
+            .read<AddToPlaylistCubit>()
+            .setMediaItemModel(mediaItem2MediaItemModel(song));
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const AddToPlaylistScreen()));
+      },
+    );
+  }
+}
+
+class _SleepTimerChip extends StatelessWidget {
+  const _SleepTimerChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: const Icon(MingCute.moon_line,
+          size: 20, color: Default_Theme.primaryColor1),
+      label: const Text('Sleep'),
+      labelStyle: const TextStyle(
+        color: Default_Theme.primaryColor1,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+      backgroundColor: Default_Theme.primaryColor2.withValues(alpha: 0.1),
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      labelPadding: const EdgeInsets.only(left: 4, right: 4),
+      onPressed: () {
+        Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const TimerView()));
+      },
+    );
   }
 }
 
@@ -514,100 +730,33 @@ class _PlayerControlsRow extends StatelessWidget {
   final BloomeeMusicPlayer musicPlayer;
   const _PlayerControlsRow({required this.musicPlayer});
 
-  Widget _buildControlColumn(
-      {required Widget topWidget, Widget? bottomWidget}) {
-    const double primaryRowHeight = 75.0;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          height: primaryRowHeight,
-          alignment: Alignment.center,
-          child: topWidget,
-        ),
-        if (bottomWidget != null)
-          SizedBox(
-            height: 40,
-            child: bottomWidget,
-          ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        _buildControlColumn(
-          topWidget: Tooltip(
-            message: "Timer",
-            child: IconButton(
-              padding: const EdgeInsets.all(5),
-              constraints: const BoxConstraints(),
-              style: const ButtonStyle(
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-              onPressed: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const TimerView()));
-              },
-              icon: const Icon(MingCute.alarm_1_line,
-                  color: Default_Theme.primaryColor1, size: 30),
-            ),
-          ),
-          bottomWidget: const _LoopControl(),
-        ),
-        _buildControlColumn(
-          topWidget: IconButton(
-            padding: const EdgeInsets.all(5),
-            constraints: const BoxConstraints(),
-            style: const ButtonStyle(
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            onPressed: () => musicPlayer.skipToPrevious(),
-            icon: const Icon(MingCute.skip_previous_fill,
-                color: Default_Theme.primaryColor1, size: 30),
-          ),
-          bottomWidget: Tooltip(
-            message: "Lyrics",
-            child: IconButton(
-              padding: const EdgeInsets.all(5),
-              constraints: const BoxConstraints(),
-              style: const ButtonStyle(
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-              icon: const Icon(MingCute.music_2_line,
-                  color: Default_Theme.primaryColor1, size: 24),
-              onPressed: () {
-                Navigator.of(context).push(
-                  PageRouteBuilder(
-                    pageBuilder: (_, __, ___) => const FullscreenLyricsView(),
-                    transitionsBuilder: (_, animation, __, child) {
-                      return FadeTransition(opacity: animation, child: child);
-                    },
-                    transitionDuration: const Duration(milliseconds: 300),
-                  ),
-                );
-              },
-            ),
-          ),
+        const _ShuffleControl(),
+        IconButton(
+          padding: const EdgeInsets.all(5),
+          constraints: const BoxConstraints(),
+          style: const ButtonStyle(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          onPressed: () => musicPlayer.skipToPrevious(),
+          icon: const Icon(MingCute.skip_previous_fill,
+              color: Default_Theme.primaryColor1, size: 35),
         ),
         const _PlayPauseButton(),
-        _buildControlColumn(
-          topWidget: IconButton(
-            padding: const EdgeInsets.all(5),
-            constraints: const BoxConstraints(),
-            style: const ButtonStyle(
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            onPressed: () => musicPlayer.skipToNext(),
-            icon: const Icon(MingCute.skip_forward_fill,
-                color: Default_Theme.primaryColor1, size: 30),
-          ),
-          bottomWidget: null,
+        IconButton(
+          padding: const EdgeInsets.all(5),
+          constraints: const BoxConstraints(),
+          style: const ButtonStyle(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          onPressed: () => musicPlayer.skipToNext(),
+          icon: const Icon(MingCute.skip_forward_fill,
+              color: Default_Theme.primaryColor1, size: 35),
         ),
-        _buildControlColumn(
-          topWidget: const _ShuffleControl(),
-          bottomWidget: const _ExternalLinkControl(),
-        ),
+        const _LoopControl(),
       ],
     );
   }
@@ -624,40 +773,33 @@ class _LoopControl extends StatelessWidget {
         stream: context.watch<BloomeePlayerCubit>().bloomeePlayer.loopMode,
         builder: (context, snapshot) {
           final loopMode = snapshot.data ?? LoopMode.off;
-          return PopupMenuButton(
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem(value: 0, child: Text("Off")),
-              const PopupMenuItem(value: 1, child: Text("Loop One")),
-              const PopupMenuItem(value: 2, child: Text("Loop All")),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Icon(
-                loopMode == LoopMode.off
-                    ? MingCute.repeat_line
-                    : loopMode == LoopMode.one
-                        ? MingCute.repeat_one_line
-                        : MingCute.repeat_fill,
-                color: loopMode == LoopMode.off
-                    ? Default_Theme.primaryColor1
-                    : Default_Theme.accentColor1,
-                size: 24,
-              ),
-            ),
-            onSelected: (value) {
+          return IconButton(
+            onPressed: () {
               final player = context.read<BloomeePlayerCubit>().bloomeePlayer;
-              switch (value) {
-                case 0:
-                  player.setLoopMode(LoopMode.off);
-                  break;
-                case 1:
+              switch (loopMode) {
+                case LoopMode.off:
                   player.setLoopMode(LoopMode.one);
                   break;
-                case 2:
+                case LoopMode.one:
                   player.setLoopMode(LoopMode.all);
+                  break;
+                case LoopMode.all:
+                  player.setLoopMode(LoopMode.off);
                   break;
               }
             },
+            icon: Icon(
+              loopMode == LoopMode.off
+                  ? MingCute.repeat_line
+                  : loopMode == LoopMode.one
+                      ? MingCute.repeat_one_line
+                      : MingCute.repeat_fill,
+              color: loopMode == LoopMode.off
+                  ? Default_Theme.primaryColor1.withValues(alpha: 0.7)
+                  : Default_Theme
+                      .primaryColor1, // Active is also white in ref image
+              size: 26,
+            ),
           );
         },
       ),
@@ -685,9 +827,9 @@ class _ShuffleControl extends StatelessWidget {
               icon: Icon(
                 MingCute.shuffle_2_fill,
                 color: isShuffle
-                    ? Default_Theme.accentColor1
-                    : Default_Theme.primaryColor1,
-                size: 30,
+                    ? Default_Theme.primaryColor1
+                    : Default_Theme.primaryColor1.withValues(alpha: 0.7),
+                size: 26,
               ),
               onPressed: () {
                 bloomeePlayerCubit.bloomeePlayer.shuffle(!isShuffle);
@@ -695,53 +837,6 @@ class _ShuffleControl extends StatelessWidget {
             ),
           );
         });
-  }
-}
-
-class _ExternalLinkControl extends StatelessWidget {
-  const _ExternalLinkControl();
-
-  @override
-  Widget build(BuildContext context) {
-    final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
-    return Tooltip(
-      message: "Open Original Link",
-      child: IconButton(
-        padding: const EdgeInsets.all(5),
-        constraints: const BoxConstraints(),
-        style:
-            const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-        icon: StreamBuilder<MediaItem?>(
-            stream: bloomeePlayerCubit.bloomeePlayer.mediaItem,
-            builder: (context, snapshot) {
-              if (snapshot.hasData &&
-                  snapshot.data?.extras?['perma_url'] != null) {
-                return snapshot.data?.extras?['source'] == 'youtube'
-                    ? const Icon(MingCute.youtube_fill,
-                        color: Default_Theme.primaryColor1, size: 24)
-                    : Text("JS",
-                        style: const TextStyle(
-                                color: Default_Theme.primaryColor1,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold)
-                            .merge(Default_Theme.secondoryTextStyle));
-              }
-              return const Icon(MingCute.external_link_line,
-                  color: Default_Theme.primaryColor1, size: 24);
-            }),
-        onPressed: () async {
-          final url = bloomeePlayerCubit
-              .bloomeePlayer.currentMedia.extras?['perma_url'];
-          if (url != null && await canLaunchUrlString(url)) {
-            await launchUrlString(url);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Unable to open the link")),
-            );
-          }
-        },
-      ),
-    );
   }
 }
 
@@ -753,59 +848,42 @@ class _PlayPauseButton extends StatelessWidget {
     final musicPlayer = context.read<BloomeePlayerCubit>().bloomeePlayer;
     return BlocBuilder<MiniPlayerBloc, MiniPlayerState>(
       builder: (context, state) {
-        Widget child;
-        // Determine button color based on state
-        // - Playing/Working states: accentColor1 (sky blue) handled by PlayPauseButton
-        // - Completed (repeat icon): accentColor1 (sky blue)
-        // - Initial/Processing/Error: accentColor2 (pink)
-        Color buttonColor = Default_Theme.accentColor2;
+        bool isPlaying = false;
+        bool isBuffering = false;
 
         if (state is MiniPlayerInitial || state is MiniPlayerProcessing) {
-          child = const CircularProgressIndicator(
-              color: Default_Theme.primaryColor1);
-          buttonColor = Default_Theme.accentColor2;
-        } else if (state is MiniPlayerCompleted) {
-          child = const Icon(FontAwesome.rotate_right_solid,
-              color: Default_Theme.primaryColor1, size: 35);
-          buttonColor =
-              Default_Theme.accentColor1; // Sky blue for completed/repeat
-        } else if (state is MiniPlayerError) {
-          child = const Icon(MingCute.warning_line,
-              color: Default_Theme.primaryColor1);
-          buttonColor = Default_Theme.accentColor2;
+          isBuffering = true;
         } else if (state is MiniPlayerWorking) {
-          if (state.isBuffering) {
-            child = const CircularProgressIndicator(
-                color: Default_Theme.primaryColor1);
-            buttonColor = state.isPlaying
-                ? Default_Theme.accentColor1
-                : Default_Theme.accentColor2;
-          } else {
-            return PlayPauseButton(
-              size: 75,
-              onPause: () => musicPlayer.pause(),
-              onPlay: () => musicPlayer.play(),
-              isPlaying: state.isPlaying,
-            );
-          }
-        } else {
-          child = const SizedBox();
+          isPlaying = state.isPlaying;
+          isBuffering = state.isBuffering;
         }
 
-        return AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(color: buttonColor, spreadRadius: 1, blurRadius: 20)
-              ],
-              shape: BoxShape.circle,
-              color: buttonColor,
-            ),
-            width: 75,
-            height: 75,
-            child:
-                Center(child: SizedBox(width: 35, height: 35, child: child)));
+        return Container(
+          width: 70,
+          height: 70,
+          decoration: const BoxDecoration(
+            color: Default_Theme.primaryColor1, // White circle
+            shape: BoxShape.circle,
+          ),
+          child: isBuffering
+              ? const CircularProgressIndicator(color: Default_Theme.themeColor)
+              : IconButton(
+                  iconSize: 35,
+                  padding: EdgeInsets.zero,
+                  icon: Icon(
+                    isPlaying ? MingCute.pause_fill : MingCute.play_fill,
+                    color: Default_Theme.themeColor, // Black icon
+                    fill: 1.0,
+                  ),
+                  onPressed: () {
+                    if (isPlaying) {
+                      musicPlayer.pause();
+                    } else {
+                      musicPlayer.play();
+                    }
+                  },
+                ),
+        );
       },
     );
   }

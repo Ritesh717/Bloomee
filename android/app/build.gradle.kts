@@ -36,14 +36,14 @@ android {
         versionName = flutter.versionName
     }
 
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = true
-        }
-    }
+    // splits {
+    //     abi {
+    //         isEnable = true
+    //         reset()
+    //         include("armeabi-v7a", "arm64-v8a", "x86_64")
+    //         isUniversalApk = true
+    //     }
+    // }
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -55,22 +55,22 @@ android {
             val keystoreProperties = Properties()
             keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 
-            val keystorePath = keystoreProperties["bloomee.jks"] as String?
+            val keystorePath = keystoreProperties["storeFile"] as String?
             val keyAliasValue = keystoreProperties["keyAlias"] as String?
 
             println("   Keystore file path: $keystorePath")
             println("   Key alias: $keyAliasValue")
 
             if (keystorePath != null) {
-                val keystoreFile = file(keystorePath)
+                val keystoreFile = rootProject.file(keystorePath)
                 println("   Keystore file exists: ${keystoreFile.exists()}")
-                println("   Keystore file path: ${keystoreFile.absolutePath}")
+                println("   Keystore file absolute path: ${keystoreFile.absolutePath}")
             }
 
             create("release") {
                 keyAlias = keystoreProperties["keyAlias"] as String?
                 keyPassword = keystoreProperties["keyPassword"] as String?
-                storeFile = rootProject.file("bloomee.jks")
+                storeFile = keystorePath?.let { rootProject.file(it) }
                 storePassword = keystoreProperties["storePassword"] as String?
                 println("   ✅ Release signing config created successfully")
             }

@@ -121,6 +121,12 @@ class QueueManager {
     }
   }
 
+  void restoreState(List<MediaItem> newQueue, int newIndex) {
+    queue.add(newQueue);
+    currentPlayingIdx = newIndex;
+    queueTitle.add("Queue");
+  }
+
   Future<void> updateQueue(List<MediaItem> newQueue,
       {bool doPlay = false}) async {
     queue.add(newQueue);

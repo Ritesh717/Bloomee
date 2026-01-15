@@ -222,27 +222,13 @@ class YtMusicService {
 
   Future<void> init() async {
     //Get country data
-    // String? countryCode = "IN";
-    // if (countryCode == null) {
-    //   try {
-    //     final response = await get(Uri.parse('http://ip-api.com/json'));
-    //     if (response.statusCode == 200) {
-    //       Map data = jsonDecode(utf8.decode(response.bodyBytes));
-    //       String countryCode = data['countryCode'];
-    //       String countryName = data['country'];
-    //       await Hive.box('settings').put('locationCode', countryCode);
-    //       await Hive.box('settings').put('locationName', countryName);
-    //     }
-    //   } catch (err) {
-    //     await Hive.box('settings').put('locationCode', 'IN');
-    //     await Hive.box('settings').put('locationName', 'India');
-    //   }
-    // }
-    headers = initializeHeaders();
-    if (!headers!.containsKey('X-Goog-Visitor-Id')) {
-      headers!['X-Goog-Visitor-Id'] = await getVisitorId(headers) ?? '';
+    // ... (commented out code)
+    var tempHeaders = initializeHeaders();
+    if (!tempHeaders.containsKey('X-Goog-Visitor-Id')) {
+      tempHeaders['X-Goog-Visitor-Id'] = await getVisitorId(tempHeaders) ?? '';
     }
     context = initializeContext();
+    headers = tempHeaders;
   }
 
   initLanguage() async {

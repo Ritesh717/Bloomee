@@ -12,6 +12,7 @@ import 'package:Bloomee/routes_and_consts/global_str_consts.dart';
 import 'package:Bloomee/services/db/backup_validator.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
+import 'package:Bloomee/utils/audio_tagger.dart';
 import 'package:isar_community/isar.dart';
 import 'package:Bloomee/services/db/GlobalDB.dart';
 import 'package:path_provider/path_provider.dart';
@@ -221,7 +222,7 @@ class BloomeeDBService {
 
   static Future<Map<String, dynamic>> restoreDB(
     String? path, {
-    // bool settings = true,
+    bool settings = true,
     bool mediaItems = true,
     bool searchHistory = true,
   }) async {
@@ -234,20 +235,20 @@ class BloomeeDBService {
       final jsonString = await backupFile.readAsString();
       final Map<String, dynamic> jsonMap = jsonDecode(jsonString);
       await isar.writeTxn(() async {
-        // if (jsonMap.containsKey("b_settings") &&
-        //     jsonMap["b_settings"] != null &&
-        //     settings) {
-        //   for (var item in jsonMap["b_settings"]) {
-        //     await isar.appSettingsBoolDBs.put(AppSettingsBoolDB.fromJson(item));
-        //   }
-        // }
-        // if (jsonMap.containsKey("s_settings") &&
-        //     jsonMap["s_settings"] != null &&
-        //     settings) {
-        //   for (var item in jsonMap["s_settings"]) {
-        //     await isar.appSettingsStrDBs.put(AppSettingsStrDB.fromJson(item));
-        //   }
-        // }
+        if (jsonMap.containsKey("b_settings") &&
+            jsonMap["b_settings"] != null &&
+            settings) {
+          for (var item in jsonMap["b_settings"]) {
+            await isar.appSettingsBoolDBs.put(AppSettingsBoolDB.fromJson(item));
+          }
+        }
+        if (jsonMap.containsKey("s_settings") &&
+            jsonMap["s_settings"] != null &&
+            settings) {
+          for (var item in jsonMap["s_settings"]) {
+            await isar.appSettingsStrDBs.put(AppSettingsStrDB.fromJson(item));
+          }
+        }
         if (jsonMap.containsKey("playlists") &&
             jsonMap["playlists"] != null &&
             mediaItems) {
@@ -464,11 +465,79 @@ class BloomeeDBService {
     return id;
   }
 
+  static Future<void> addMediaItems(
+      List<MediaItemDB> mediaItemsDB, String playlistName) async {
+    Isar isarDB = await db;
+    MediaPlaylistDB mediaPlaylistDB =
+        MediaPlaylistDB(playlistName: playlistName);
+
+    // search for playlist if already exists
+    MediaPlaylistDB? _mediaPlaylistDB = isarDB.mediaPlaylistDBs
+        .filter()
+        .isarIdEqualTo(mediaPlaylistDB.isarId)
+        .findFirstSync();
+
+    if (_mediaPlaylistDB == null) {
+      // create playlist if not exists
+      await createPlaylist(playlistName);
+      _mediaPlaylistDB = isarDB.mediaPlaylistDBs
+          .filter()
+          .isarIdEqualTo(mediaPlaylistDB.isarId)
+          .findFirstSync();
+    }
+
+    if (_mediaPlaylistDB == null) return;
+
+    await isarDB.writeTxn(() async {
+      // 1. Process all media items
+      for (var mediaItemDB in mediaItemsDB) {
+        // search for media item if already exists
+        MediaItemDB? _mediaitem = await isarDB.mediaItemDBs
+            .filter()
+            .permaURLEqualTo(mediaItemDB.permaURL)
+            .findFirst();
+
+        if (_mediaitem != null) {
+          // update existing
+          _mediaitem.mediaInPlaylistsDB.add(_mediaPlaylistDB!);
+          await isarDB.mediaItemDBs.put(_mediaitem);
+          // Update ref for ranking
+          mediaItemDB.id = _mediaitem.id;
+        } else {
+          // create new
+          mediaItemDB.mediaInPlaylistsDB.add(_mediaPlaylistDB!);
+          mediaItemDB.id = await isarDB.mediaItemDBs.put(mediaItemDB);
+        }
+      }
+
+      // 2. Update Playlist Ranks
+      // Reload playlist to be safe (though we have ref)
+      MediaPlaylistDB? playlistToUpdate =
+          await isarDB.mediaPlaylistDBs.get(_mediaPlaylistDB!.isarId);
+      if (playlistToUpdate != null) {
+        List<int> currentRanks =
+            playlistToUpdate.mediaRanks.toList(growable: true);
+        bool changed = false;
+        for (var item in mediaItemsDB) {
+          if (item.id != null && !currentRanks.contains(item.id)) {
+            currentRanks.add(item.id!);
+            changed = true;
+          }
+        }
+        if (changed) {
+          playlistToUpdate.mediaRanks = currentRanks;
+          await isarDB.mediaPlaylistDBs.put(playlistToUpdate);
+        }
+      }
+    });
+  }
+
   static Future<void> removeMediaItem(MediaItemDB mediaItemDB) async {
     Isar isarDB = await db;
     bool _res = false;
-    isarDB.writeTxnSync(
-        () => _res = isarDB.mediaItemDBs.deleteSync(mediaItemDB.id!));
+    await isarDB.writeTxn(() async {
+      _res = await isarDB.mediaItemDBs.delete(mediaItemDB.id!);
+    });
     if (_res) {
       log("${mediaItemDB.title} is Deleted!!", name: "DB");
     }
@@ -1205,7 +1274,7 @@ class BloomeeDBService {
       return;
     }
     isarDB.writeTxnSync(() => isarDB.downloadDBs.putSync(downloadDB));
-    addMediaItem(
+    await addMediaItem(
         MediaItem2MediaItemDB(mediaItem), GlobalStrConsts.downloadPlaylist);
   }
 
@@ -1231,6 +1300,27 @@ class BloomeeDBService {
       log("Failed to delete file: ${downloadDB!.fileName}",
           error: e, name: "DB");
     }
+  }
+
+  static Future<List<MediaItemModel>> getMissingDownloads() async {
+    Isar isarDB = await db;
+    List<DownloadDB> allDownloads =
+        isarDB.downloadDBs.where(sort: Sort.desc).findAllSync();
+
+    List<MediaItemModel> missing = [];
+    for (var element in allDownloads) {
+      final file = File("${element.filePath}/${element.fileName}");
+      if (!file.existsSync()) {
+        final mediaItemDB = isarDB.mediaItemDBs
+            .filter()
+            .mediaIDEqualTo(element.mediaId)
+            .findFirstSync();
+        if (mediaItemDB != null) {
+          missing.add(MediaItemDB2MediaItem(mediaItemDB));
+        }
+      }
+    }
+    return missing;
   }
 
   static Future<DownloadDB?> getDownloadDB(MediaItemModel mediaItem) async {
@@ -1269,16 +1359,35 @@ class BloomeeDBService {
     for (var element in _downloadedSongs) {
       if (File("${element.filePath}/${element.fileName}").existsSync()) {
         log("File exists", name: "DB");
-        _mediaItems.add(MediaItemDB2MediaItem(isarDB.mediaItemDBs
+        final mediaItemDB = isarDB.mediaItemDBs
             .filter()
             .mediaIDEqualTo(element.mediaId)
-            .findFirstSync()!));
+            .findFirstSync();
+
+        if (mediaItemDB != null) {
+          _mediaItems.add(MediaItemDB2MediaItem(mediaItemDB));
+        } else {
+          // Handle missing media item - maybe remove the download record?
+          // For now, logging and skipping to avoid crash
+          log("Missing MediaItem in DB for download: ${element.fileName}",
+              name: "DB");
+        }
       } else {
         log("File not exists ${element.fileName} ", name: "DB");
-        removeDownloadDB(MediaItemDB2MediaItem(isarDB.mediaItemDBs
+
+        final mediaItemDB = isarDB.mediaItemDBs
             .filter()
             .mediaIDEqualTo(element.mediaId)
-            .findFirstSync()!));
+            .findFirstSync();
+
+        if (mediaItemDB != null) {
+          removeDownloadDB(MediaItemDB2MediaItem(mediaItemDB));
+        } else {
+          // Can't remove nicely without MediaItem, but we can try to clean up the downloadDB purely by ID if we had logic for it
+          // For now, standard remove requires MediaItemModel.
+          // We can manually delete the DownloadDB entry if we want to be thorough.
+          isarDB.writeTxnSync(() => isarDB.downloadDBs.deleteSync(element.id!));
+        }
       }
     }
     return _mediaItems;
@@ -1320,6 +1429,13 @@ class BloomeeDBService {
   static Future<List<NotificationDB>> getNotifications() async {
     Isar isarDB = await db;
     return isarDB.notificationDBs.where().sortByTimeDesc().findAllSync();
+  }
+
+  static Future<void> clearAllDownloads() async {
+    Isar isarDB = await db;
+    await isarDB.writeTxn(() async {
+      await isarDB.downloadDBs.clear();
+    });
   }
 
   static Future<void> clearNotifications() async {
@@ -1541,6 +1657,302 @@ class BloomeeDBService {
     }
 
     return results;
+  }
+
+  static Future<void> moveDownloads(
+    String newPath,
+    String oldPath,
+    Function(int current, int total, String fileName) onProgress,
+  ) async {
+    Isar isarDB = await db;
+    List<DownloadDB> allDownloads = await isarDB.downloadDBs.where().findAll();
+    int total = allDownloads.length;
+    int current = 0;
+
+    // Optimization: Track processed files to avoid double moving
+    Set<String> processedFiles = {};
+
+    // Group downloads by their relative directory from oldPath
+    Map<String, List<DownloadDB>> dirGroups = {};
+
+    for (var download in allDownloads) {
+      String relativeDir = "";
+      if (download.filePath.startsWith(oldPath)) {
+        if (download.filePath.length > oldPath.length) {
+          relativeDir = download.filePath.substring(oldPath.length);
+          if (relativeDir.startsWith(Platform.pathSeparator)) {
+            relativeDir = relativeDir.substring(1);
+          } else if (relativeDir.startsWith('/')) {
+            relativeDir = relativeDir.substring(1);
+          } else if (relativeDir.startsWith('\\')) {
+            relativeDir = relativeDir.substring(1);
+          }
+        }
+      }
+
+      if (relativeDir.isNotEmpty) {
+        dirGroups.putIfAbsent(relativeDir, () => []).add(download);
+      }
+    }
+
+    // 1. Process directory moves (Optimization)
+    for (var entry in dirGroups.entries) {
+      final relativeDir = entry.key;
+      final downloadsInDir = entry.value;
+
+      final oldDir = Directory(p.join(oldPath, relativeDir));
+      final newDir = Directory(p.join(newPath, relativeDir));
+
+      if (await oldDir.exists()) {
+        try {
+          // If new directory doesn't exist, try rename (fast move of entire folder)
+          if (!await newDir.exists()) {
+            // Create parent of newDir if needed
+            if (!await newDir.parent.exists()) {
+              await newDir.parent.create(recursive: true);
+            }
+
+            log("Optimized Move: Renaming folder $relativeDir to ${newDir.path}",
+                name: "BloomeeDBService");
+            await oldDir.rename(newDir.path);
+
+            // Update all DB records in this dir without moving files individually
+            await isarDB.writeTxn(() async {
+              for (var download in downloadsInDir) {
+                download.filePath = newDir.path;
+                await isarDB.downloadDBs.put(download);
+                processedFiles.add(download.fileName);
+                current++;
+                onProgress(current, total, download.fileName);
+              }
+            });
+            continue; // Directory moved successfully
+          }
+        } catch (e) {
+          log("Directory move optimization failed for $relativeDir: $e",
+              name: "BloomeeDBService");
+          // Fallback to individual file copy will happen below
+        }
+      }
+    }
+
+    // 2. Process remaining individual files (root files or fallback)
+    for (var download in allDownloads) {
+      if (processedFiles.contains(download.fileName)) continue;
+
+      current++;
+      onProgress(current, total, download.fileName);
+
+      try {
+        final oldFile = File(p.join(download.filePath, download.fileName));
+        if (await oldFile.exists()) {
+          // Re-calculate relative path for fallback
+          String relativeDir = "";
+          if (download.filePath.startsWith(oldPath)) {
+            if (download.filePath.length > oldPath.length) {
+              relativeDir = download.filePath.substring(oldPath.length);
+              if (relativeDir.startsWith(Platform.pathSeparator)) {
+                relativeDir = relativeDir.substring(1);
+              } else if (relativeDir.startsWith('/')) {
+                relativeDir = relativeDir.substring(1);
+              } else if (relativeDir.startsWith('\\')) {
+                relativeDir = relativeDir.substring(1);
+              }
+            }
+          }
+
+          final newDir =
+              relativeDir.isNotEmpty ? p.join(newPath, relativeDir) : newPath;
+          final newFile = File(p.join(newDir, download.fileName));
+
+          // Ensure directory exists
+          if (!await newFile.parent.exists()) {
+            await newFile.parent.create(recursive: true);
+          }
+
+          // Move file
+          await oldFile.copy(newFile.path);
+          await oldFile.delete();
+
+          // Cleanup empty old dir
+          if (relativeDir.isNotEmpty) {
+            try {
+              final oldDir = oldFile.parent;
+              if (await oldDir.list().isEmpty) {
+                await oldDir.delete();
+              }
+            } catch (_) {}
+          }
+
+          // Update DB
+          download.filePath = newDir;
+          await isarDB.writeTxn(() => isarDB.downloadDBs.put(download));
+          log("Moved ${download.fileName} to ${newFile.path}",
+              name: "BloomeeDBService");
+        } else {
+          log("File not found: ${download.fileName}", name: "BloomeeDBService");
+        }
+      } catch (e) {
+        log("Failed to move ${download.fileName}",
+            error: e, name: "BloomeeDBService");
+      }
+    }
+  }
+
+  static Future<void> scanAndImportExistingFiles(String directoryPath) async {
+    try {
+      final dir = Directory(directoryPath);
+      if (!await dir.exists()) {
+        return;
+      }
+
+      final isarDB = await db;
+      final existingDownloads = await isarDB.downloadDBs.where().findAll();
+      final existingFileNames =
+          existingDownloads.map((e) => e.fileName).toSet();
+
+      // Recursive scan to find files in album folders
+      final files = dir.listSync(recursive: true);
+      for (final file in files) {
+        final filename = p.basename(file.path);
+
+        if (file is File) {
+          if (!_isAudioFile(filename)) {
+            continue;
+          }
+
+          // Determine album from folder structure
+          String album = "Unknown Album";
+          String actualFilePath = file.parent.path;
+          final parentDirName = p.basename(file.parent.path);
+
+          // If the parent directory is not the root download directory, use it as album
+          if (file.parent.path != dir.path) {
+            album = parentDirName;
+          }
+
+          // Check if this file already exists in DB
+          if (existingFileNames.contains(filename)) {
+            // UPDATE EXISTING ENTRY
+            log("Updating existing file: $filename with folder-based album info",
+                name: "BloomeeDBService");
+
+            // Find the download record
+            final downloadRecord = existingDownloads.firstWhere(
+              (d) => d.fileName == filename,
+            );
+
+            // Find the media item
+            final mediaItem = await isarDB.mediaItemDBs
+                .filter()
+                .mediaIDEqualTo(downloadRecord.mediaId)
+                .findFirst();
+
+            if (mediaItem != null) {
+              bool needsUpdate = false;
+
+              // Update filePath if it's different (file might have been moved to subfolder)
+              if (downloadRecord.filePath != actualFilePath) {
+                downloadRecord.filePath = actualFilePath;
+                needsUpdate = true;
+              }
+
+              // Update album if it's from a subfolder and current album is generic
+              if (album != "Unknown Album" &&
+                  (mediaItem.album == "Unknown Album" ||
+                      mediaItem.album.isEmpty)) {
+                mediaItem.album = album;
+                needsUpdate = true;
+              }
+
+              // Update streamingURL to reflect actual file path
+              final correctStreamingURL = file.path;
+              if (mediaItem.streamingURL != correctStreamingURL) {
+                mediaItem.streamingURL = correctStreamingURL;
+                needsUpdate = true;
+              }
+
+              if (needsUpdate) {
+                await isarDB.writeTxn(() async {
+                  await isarDB.downloadDBs.put(downloadRecord);
+                  await isarDB.mediaItemDBs.put(mediaItem);
+                });
+                log("Updated $filename: album=$album, path=$actualFilePath",
+                    name: "BloomeeDBService");
+              }
+            }
+            continue; // Skip to next file
+          }
+
+          // NEW FILE IMPORT (existing logic)
+          log("Found existing file: $filename, importing...",
+              name: "BloomeeDBService");
+
+          final title = p.basenameWithoutExtension(filename);
+          final fileId = filename;
+
+          final newDownload = DownloadDB(
+            fileName: filename,
+            filePath:
+                actualFilePath, // Use actual file path including subfolder
+            lastDownloaded: DateTime.now(),
+            mediaId: fileId,
+          );
+
+          // Try to read metadata from file
+          String finalTitle = title;
+          String artist = "Unknown Artist";
+          String artUrl = "";
+          Duration? duration;
+
+          try {
+            final metadata = await AudioTagger.readTags(file.path);
+            log("Metadata for $filename: $metadata", name: "BloomeeDBService");
+            if (metadata != null) {
+              if (metadata.title.isNotEmpty) finalTitle = metadata.title;
+              if (metadata.artist.isNotEmpty) artist = metadata.artist;
+              if (metadata.album.isNotEmpty) album = metadata.album;
+              if (metadata.artworkUrl.isNotEmpty) artUrl = metadata.artworkUrl;
+              duration = metadata.duration;
+            }
+          } catch (e) {
+            log("Error reading tags for $filename: $e",
+                name: "BloomeeDBService");
+          }
+
+          // Create a robust MediaItemDB
+          final mediaItem = MediaItemDB(
+            title: finalTitle,
+            album: album,
+            artist: artist,
+            artURL: artUrl,
+            genre: "Unknown",
+            mediaID: fileId,
+            streamingURL: file.path, // Local path as URL
+            permaURL: "",
+            language: "Local",
+            isLiked: false,
+            source: "Local",
+            duration: duration?.inMilliseconds,
+          );
+
+          await isarDB.writeTxn(() async {
+            await isarDB.downloadDBs.put(newDownload);
+            await isarDB.mediaItemDBs.put(mediaItem);
+          });
+
+          await addMediaItem(mediaItem, GlobalStrConsts.downloadPlaylist);
+        }
+      }
+    } catch (e) {
+      log("Failed to scan existing files", error: e, name: "BloomeeDBService");
+    }
+  }
+
+  static bool _isAudioFile(String path) {
+    final ext = p.extension(path).toLowerCase();
+    return ['.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.opus', '.mp4']
+        .contains(ext);
   }
 }
 

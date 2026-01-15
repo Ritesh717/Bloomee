@@ -71,7 +71,12 @@ class _YoutubePlaylistState extends State<YoutubePlaylist> {
 
   @override
   void initState() {
-    data = YTMusic().getPlaylistFull(widget.id.replaceAll("youtube", ""));
+    String cleanId = widget.id.replaceAll("youtube", "");
+    if (widget.type == 'album') {
+      data = YTMusic().getAlbumFull(cleanId);
+    } else {
+      data = YTMusic().getPlaylistFull(cleanId);
+    }
     super.initState();
   }
 
@@ -262,7 +267,8 @@ class _YoutubePlaylistState extends State<YoutubePlaylist> {
                                                               FontWeight.bold,
                                                           color: Default_Theme
                                                               .primaryColor2
-                                                              .withValues(alpha: 0.8),
+                                                              .withValues(
+                                                                  alpha: 0.8),
                                                         ).merge(Default_Theme
                                                             .secondoryTextStyle),
                                                       ),
@@ -277,7 +283,8 @@ class _YoutubePlaylistState extends State<YoutubePlaylist> {
                                                               FontWeight.bold,
                                                           color: Default_Theme
                                                               .primaryColor2
-                                                              .withValues(alpha: 0.8),
+                                                              .withValues(
+                                                                  alpha: 0.8),
                                                         ).merge(Default_Theme
                                                             .secondoryTextStyle),
                                                       ),

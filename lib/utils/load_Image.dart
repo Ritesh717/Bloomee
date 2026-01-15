@@ -46,10 +46,16 @@ Image loadImage(coverImageUrl,
   );
 }
 
-CachedNetworkImage loadImageCached(coverImageURL,
+Widget loadImageCached(coverImageURL,
     {placeholderPath = "assets/icons/bloomee_new_logo_c.png",
     fit = BoxFit.cover}) {
   ImageProvider<Object> placeHolder = AssetImage(placeholderPath);
+  if (coverImageURL == null || coverImageURL.toString().isEmpty) {
+    return Image(
+      image: placeHolder,
+      fit: fit,
+    );
+  }
   return CachedNetworkImage(
     imageUrl: coverImageURL,
     memCacheWidth: 500,
@@ -88,6 +94,12 @@ class LoadImageCached extends StatefulWidget {
 class _LoadImageCachedState extends State<LoadImageCached> {
   @override
   Widget build(BuildContext context) {
+    if (widget.imageUrl.isEmpty) {
+      return Image(
+        image: AssetImage(widget.placeholderUrl),
+        fit: widget.fit,
+      );
+    }
     return CachedNetworkImage(
       imageUrl: widget.imageUrl,
       placeholder: (context, url) => Image(

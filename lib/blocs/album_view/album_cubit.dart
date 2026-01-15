@@ -19,6 +19,13 @@ class AlbumCubit extends Cubit<AlbumState> {
       : super(AlbumInitial()) {
     emit(AlbumLoading(album: album));
     checkIsSaved();
+
+    if (album.songs.isNotEmpty && album.source == 'local') {
+      emit(AlbumLoaded(
+          album: album, isSavedToCollections: state.isSavedToCollections));
+      return;
+    }
+
     switch (sourceEngine) {
       case SourceEngine.eng_JIS:
         SaavnAPI().fetchAlbumDetails(album.extra['token']).then(

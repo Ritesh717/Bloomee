@@ -1,4 +1,5 @@
 import 'package:Bloomee/blocs/settings_cubit/cubit/settings_cubit.dart';
+import 'package:Bloomee/blocs/explore/cubit/explore_cubits.dart';
 import 'package:Bloomee/screens/widgets/setting_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:Bloomee/theme_data/default.dart';
@@ -44,6 +45,192 @@ class CountrySettings extends StatelessWidget {
                   onChanged: (value) {
                     context.read<SettingsCubit>().setAutoGetCountry(value);
                   }),
+              SettingTile(
+                title: "App Display Language",
+                subtitle: "Language for the app interface.",
+                trailing: DropdownButton(
+                  value: state.displayLanguage,
+                  isDense: true,
+                  style: const TextStyle(
+                    overflow: TextOverflow.ellipsis,
+                    fontWeight: FontWeight.bold,
+                    color: Default_Theme.primaryColor1,
+                    fontSize: 15,
+                  ).merge(Default_Theme.secondoryTextStyle),
+                  underline: const SizedBox(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      context
+                          .read<SettingsCubit>()
+                          .setDisplayLanguage(newValue);
+                    }
+                  },
+                  items: languages.keys
+                      .toList()
+                      .map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: SizedBox(
+                        width: 100,
+                        child: Text(
+                          value,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                onTap: () {},
+              ),
+              // Multi-select Language Chips
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, bottom: 12, top: 8),
+                      child: Text(
+                        "Content Language Preferences",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Default_Theme.primaryColor1,
+                        ),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, bottom: 12),
+                      child: Text(
+                        "Select languages for personalized content recommendations",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Default_Theme.primaryColor2,
+                        ),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: languages.keys.map((lang) {
+                        final isSelected =
+                            state.contentLanguages.contains(lang);
+                        final selectionIndex = isSelected
+                            ? state.contentLanguages.indexOf(lang) + 1
+                            : null;
+
+                        return GestureDetector(
+                          onTap: () {
+                            List<String> current =
+                                List.from(state.contentLanguages);
+                            if (isSelected) {
+                              current.remove(lang);
+                            } else {
+                              current.add(lang);
+                            }
+                            context
+                                .read<SettingsCubit>()
+                                .setContentLanguages(current);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Default_Theme.accentColor2
+                                  : Default_Theme.themeColor.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Default_Theme.accentColor2
+                                    : Default_Theme.primaryColor2
+                                        .withOpacity(0.3),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isSelected) ...[
+                                  Container(
+                                    width: 20,
+                                    height: 20,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '$selectionIndex',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Default_Theme.accentColor2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Text(
+                                  lang,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Default_Theme.primaryColor1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+              // Save Button
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Trigger home screen refresh to reflect new language order
+                      context.read<YTMusicCubit>().fetchYTMusic();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Language preferences saved! Refreshing content...'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Default_Theme.accentColor2,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Save Language Preferences',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               SettingTile(
                 title: "Country",
                 subtitle: "Country to set as default for the app.",
@@ -285,4 +472,24 @@ final Map<String, String> countries = {
   'Zambia': 'ZM',
   'Zimbabwe': 'ZW',
   // Add more countries and their ISO alpha-2 codes here
+  // Add more countries and their ISO alpha-2 codes here
+};
+
+final Map<String, String> languages = {
+  'Hindi': 'Hindi',
+  'English': 'English',
+  'Punjabi': 'Punjabi',
+  'Tamil': 'Tamil',
+  'Telugu': 'Telugu',
+  'Marathi': 'Marathi',
+  'Gujarati': 'Gujarati',
+  'Bengali': 'Bengali',
+  'Kannada': 'Kannada',
+  'Malayalam': 'Malayalam',
+  'Bhojpuri': 'Bhojpuri',
+  'Urdu': 'Urdu',
+  'Haryanvi': 'Haryanvi',
+  'Rajasthani': 'Rajasthani',
+  'Odia': 'Odia',
+  'Assamese': 'Assamese',
 };
