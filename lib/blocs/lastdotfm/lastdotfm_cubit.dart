@@ -47,7 +47,7 @@ class LastdotfmCubit extends Cubit<LastdotfmState> {
     }
 
     scrobbleSub = playerCubit.progressStreams.listen((event) {
-      if (playerCubit.bloomeePlayer.audioPlayer.playing &&
+      if (playerCubit.bloomeePlayer.playing &&
           event.currentPlaybackState.processingState == ProcessingState.ready) {
         if (lastPlayed != playerCubit.bloomeePlayer.currentMedia ||
             !stopwatch.isRunning) {

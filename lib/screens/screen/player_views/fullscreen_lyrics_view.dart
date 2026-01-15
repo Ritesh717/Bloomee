@@ -477,9 +477,8 @@ class _FullscreenSyncedLyricsState extends State<FullscreenSyncedLyrics> {
 
   void _setupPositionListener() {
     final bloomeePlayerCubit = context.read<BloomeePlayerCubit>();
-    _positionSubscription = bloomeePlayerCubit
-        .bloomeePlayer.audioPlayer.positionStream
-        .listen((position) {
+    _positionSubscription =
+        bloomeePlayerCubit.bloomeePlayer.positionStream.listen((position) {
       if (!mounted) return;
 
       _currentPosition = position;

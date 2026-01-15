@@ -391,7 +391,7 @@ class _YoutubePlaylistState extends State<YoutubePlaylist> {
                                                                         return StreamBuilder<
                                                                                 PlayerState>(
                                                                             stream:
-                                                                                context.read<BloomeePlayerCubit>().bloomeePlayer.audioPlayer.playerStateStream,
+                                                                                context.read<BloomeePlayerCubit>().bloomeePlayer.playerStateStream,
                                                                             builder: (context, snapshot2) {
                                                                               if (snapshot2.hasData && (snapshot2.data?.playing ?? false)) {
                                                                                 return PlayPauseButton(

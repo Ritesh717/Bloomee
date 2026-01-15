@@ -205,7 +205,7 @@ class ExternalMediaImporter {
 
   static Future<MediaItemModel?> ytMediaImporter(String url) async {
     final videoId = extractVideoId(url);
-    SnackbarService.showMessage("Getting Youtube Audio...", loading: true);
+    // SnackbarService.showMessage("Getting Youtube Audio...", loading: true);
     if (videoId != null) {
       try {
         final video = await YoutubeExplode().videos.get(videoId);
@@ -213,7 +213,8 @@ class ExternalMediaImporter {
             .formatVideo(video: video, quality: "High", getUrl: false);
         final item = fromYtVidSongMap2MediaItem(itemMap!);
         log("Got: ${item.title}", name: "Youtube Importer");
-        SnackbarService.showMessage("Got: ${item.title}");
+        log("Got: ${item.title}", name: "Youtube Importer");
+        // SnackbarService.showMessage("Got: ${item.title}");
         return item;
       } catch (e) {
         log(e.toString());
@@ -227,14 +228,15 @@ class ExternalMediaImporter {
 
   static Future<MediaItemModel?> ytmMediaImporter(String url) async {
     final videoId = extractYTMusicId(url);
-    SnackbarService.showMessage("Getting Youtube Music Audio...",
-        loading: true);
+    // SnackbarService.showMessage("Getting Youtube Music Audio...",
+    //     loading: true);
     if (videoId != null) {
       try {
         final itemMap = await YtMusicService().getSongData(videoId: videoId);
         final item = fromYtSongMap2MediaItem(itemMap);
         log("Got: ${item.title}", name: "Youtube Music Importer");
-        SnackbarService.showMessage("Got: ${item.title}");
+        log("Got: ${item.title}", name: "Youtube Music Importer");
+        // SnackbarService.showMessage("Got: ${item.title}");
         return item;
       } catch (e) {
         log(e.toString());

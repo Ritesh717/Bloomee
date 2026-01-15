@@ -494,7 +494,6 @@ class PlaylistView extends StatelessWidget {
                                                           .read<
                                                               BloomeePlayerCubit>()
                                                           .bloomeePlayer
-                                                          .audioPlayer
                                                           .playerStateStream,
                                                       builder:
                                                           (context, snapshot2) {
@@ -512,7 +511,6 @@ class PlaylistView extends StatelessWidget {
                                                                 .read<
                                                                     BloomeePlayerCubit>()
                                                                 .bloomeePlayer
-                                                                .audioPlayer
                                                                 .play(),
                                                             isPlaying: true,
                                                             size: 40,
@@ -528,7 +526,6 @@ class PlaylistView extends StatelessWidget {
                                                                 .read<
                                                                     BloomeePlayerCubit>()
                                                                 .bloomeePlayer
-                                                                .audioPlayer
                                                                 .play(),
                                                             isPlaying: false,
                                                             size: 40,

@@ -230,7 +230,6 @@ class _AlbumViewState extends State<AlbumView> {
                         } else if (!context
                             .read<BloomeePlayerCubit>()
                             .bloomeePlayer
-                            .audioPlayer
                             .playing) {
                           context
                               .read<BloomeePlayerCubit>()
@@ -320,7 +319,6 @@ class _AlbumViewState extends State<AlbumView> {
                               } else if (!context
                                   .read<BloomeePlayerCubit>()
                                   .bloomeePlayer
-                                  .audioPlayer
                                   .playing) {
                                 context
                                     .read<BloomeePlayerCubit>()

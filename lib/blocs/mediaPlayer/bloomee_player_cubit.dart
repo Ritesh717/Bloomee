@@ -33,10 +33,10 @@ class BloomeePlayerCubit extends Cubit<BloomeePlayerState> {
   void _setupProgressStreams() {
     progressStreams = Rx.defer(
       () => Rx.combineLatest3(
-          bloomeePlayer.audioPlayer.positionStream.throttleTime(const Duration(
+          bloomeePlayer.positionStream.throttleTime(const Duration(
               milliseconds: 200)), // Throttle to 5 Hz for performance
-          bloomeePlayer.audioPlayer.playbackEventStream,
-          bloomeePlayer.audioPlayer.playerStateStream,
+          bloomeePlayer.playbackEventStream,
+          bloomeePlayer.playerStateStream,
           (Duration a, PlaybackEvent b, PlayerState c) => ProgressBarStreams(
               currentPos: a, currentPlaybackState: b, currentPlayerState: c)),
       reusable: true,

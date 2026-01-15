@@ -20,7 +20,22 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 class BloomeeMusicPlayer extends BaseAudioHandler
     with SeekHandler, QueueHandler {
-  late AudioPlayer audioPlayer;
+  late AudioPlayer _audioPlayer;
+
+  // Expose necessary streams and properties
+  Stream<Duration> get positionStream => _audioPlayer.positionStream;
+  Stream<PlaybackEvent> get playbackEventStream =>
+      _audioPlayer.playbackEventStream;
+  Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
+  Stream<double> get volumeStream => _audioPlayer.volumeStream;
+  Duration? get duration => _audioPlayer.duration;
+  Duration get position => _audioPlayer.position;
+  Duration get bufferedPosition => _audioPlayer.bufferedPosition;
+  double get speed => _audioPlayer.speed;
+  double get volume => _audioPlayer.volume;
+  bool get playing => _audioPlayer.playing;
+
+  Future<void> setVolume(double volume) => _audioPlayer.setVolume(volume);
 
   // Modular components
   late AudioSourceManager _audioSourceManager;
@@ -57,19 +72,29 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   @override
   BehaviorSubject<String> get queueTitle => _queueManager.queueTitle;
 
-  BloomeeMusicPlayer() {
+  BloomeeMusicPlayer({
+    AudioSourceManager? audioSourceManager,
+    QueueManager? queueManager,
+    RelatedSongsManager? relatedSongsManager,
+    PlayerErrorHandler? errorHandler,
+  }) {
     _initializeAudioPlayer();
-    _initializeModules();
+    _initializeModules(
+      audioSourceManager: audioSourceManager,
+      queueManager: queueManager,
+      relatedSongsManager: relatedSongsManager,
+      errorHandler: errorHandler,
+    );
     _initializePlayer();
     _recentlyPlayedTracker = RecentlyPlayedTracker(
-      audioPlayer,
+      _audioPlayer,
       () => _queueManager.currentMediaItem,
     );
   }
 
   void _initializeAudioPlayer() {
     _isDisposed = false;
-    audioPlayer = AudioPlayer(
+    _audioPlayer = AudioPlayer(
       handleInterruptions: true,
       androidApplyAudioAttributes: true,
       handleAudioSessionActivation: true,
@@ -79,7 +104,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   bool get isPlayerHealthy {
     if (_isDisposed) return false;
     try {
-      final _ = audioPlayer.playerState;
+      final _ = _audioPlayer.playerState;
       return true;
     } catch (e) {
       return false;
@@ -108,7 +133,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _initializeModules();
     _initializePlayer();
     _recentlyPlayedTracker = RecentlyPlayedTracker(
-      audioPlayer,
+      _audioPlayer,
       () => _queueManager.currentMediaItem,
     );
 
@@ -133,12 +158,17 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _recentlyPlayedTracker.setPercentThreshold(percent);
   }
 
-  void _initializeModules() {
-    // Initialize all modular components
-    _audioSourceManager = AudioSourceManager();
-    _errorHandler = PlayerErrorHandler();
-    _queueManager = QueueManager();
-    _relatedSongsManager = RelatedSongsManager();
+  void _initializeModules({
+    AudioSourceManager? audioSourceManager,
+    QueueManager? queueManager,
+    RelatedSongsManager? relatedSongsManager,
+    PlayerErrorHandler? errorHandler,
+  }) {
+    // Initialize all modular components or use injected ones
+    _audioSourceManager = audioSourceManager ?? AudioSourceManager();
+    _errorHandler = errorHandler ?? PlayerErrorHandler();
+    _queueManager = queueManager ?? QueueManager();
+    _relatedSongsManager = relatedSongsManager ?? RelatedSongsManager();
 
     // Warm the download cache for instant offline playback lookups
     _audioSourceManager.warmCache();
@@ -155,13 +185,13 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   }
 
   void _initializePlayer() {
-    audioPlayer.setVolume(1);
+    _audioPlayer.setVolume(1);
     _playbackEventSubscription =
-        audioPlayer.playbackEventStream.listen(_broadcastPlayerEvent);
-    audioPlayer.setLoopMode(LoopMode.off);
+        _audioPlayer.playbackEventStream.listen(_broadcastPlayerEvent);
+    _audioPlayer.setLoopMode(LoopMode.off);
 
     // Enhanced error handling for player events
-    _playerStateSubscription = audioPlayer.playerStateStream.listen((state) {
+    _playerStateSubscription = _audioPlayer.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.idle &&
           state.playing == false &&
           _errorHandler.lastError.value != null) {
@@ -175,8 +205,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
     // Update the current media item when the audio player changes to the next
     _mediaItemSubscription = Rx.combineLatest2(
-      audioPlayer.sequenceStream,
-      audioPlayer.currentIndexStream,
+      _audioPlayer.sequenceStream,
+      _audioPlayer.currentIndexStream,
       (sequence, index) {
         if (sequence.isEmpty) return null;
         MediaItem item = sequence[index ?? 0].tag as MediaItem;
@@ -198,14 +228,14 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     // Trigger skipToNext when the current song ends.
     final endingOffset =
         Platform.isWindows ? 200 : (Platform.isLinux ? 700 : 200);
-    _positionSubscription = audioPlayer.positionStream.listen((event) {
+    _positionSubscription = _audioPlayer.positionStream.listen((event) {
       //check if the current queue is empty and if it is, add related songs
       EasyThrottle.throttle('loadRelatedSongs', const Duration(seconds: 5),
           () async => check4RelatedSongs());
-      if (((audioPlayer.duration != null &&
-              audioPlayer.duration?.inSeconds != 0 &&
+      if (((_audioPlayer.duration != null &&
+              _audioPlayer.duration?.inSeconds != 0 &&
               event.inMilliseconds >
-                  audioPlayer.duration!.inMilliseconds - endingOffset)) &&
+                  _audioPlayer.duration!.inMilliseconds - endingOffset)) &&
           loopMode.value != LoopMode.one &&
           _queueManager.queue.value.isNotEmpty) {
         // Add safety check for queue
@@ -231,7 +261,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     await _playerStateStorage.saveState(
       queue: _queueManager.queue.value,
       index: _queueManager.currentPlayingIdx,
-      position: audioPlayer.position,
+      position: _audioPlayer.position,
     );
   }
 
@@ -268,7 +298,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         _queueManager.currentPlayingIdx < _queueManager.queue.value.length) {
       final currentItem =
           _queueManager.queue.value[_queueManager.currentPlayingIdx];
-      final currentPosition = audioPlayer.position;
+      final currentPosition = _audioPlayer.position;
       log('Retrying current track: ${currentItem.title} at position $currentPosition',
           name: 'bloomeePlayer');
 
@@ -285,7 +315,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   }
 
   void _broadcastPlayerEvent(PlaybackEvent event) {
-    bool isPlaying = audioPlayer.playing;
+    bool isPlaying = _audioPlayer.playing;
     playbackState.add(PlaybackState(
       // Which buttons should appear in the notification now
       controls: [
@@ -309,10 +339,10 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         MediaAction.seek,
       },
       androidCompactActionIndices: const [0, 1, 2],
-      updatePosition: audioPlayer.position,
+      updatePosition: _audioPlayer.position,
       playing: isPlaying,
-      bufferedPosition: audioPlayer.bufferedPosition,
-      speed: audioPlayer.speed,
+      bufferedPosition: _audioPlayer.bufferedPosition,
+      speed: _audioPlayer.speed,
     ));
 
     DiscordService.updatePresence(
@@ -337,7 +367,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       return;
     }
     await WakelockPlus.enable();
-    await audioPlayer.play();
+    await _audioPlayer.play();
   }
 
   Future<void> check4RelatedSongs() async {
@@ -357,32 +387,32 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   @override
   Future<void> seek(Duration position) async {
-    audioPlayer.seek(position);
+    _audioPlayer.seek(position);
   }
 
   Future<void> seekNSecForward(Duration n) async {
-    if ((audioPlayer.duration ?? const Duration(seconds: 0)) >=
-        audioPlayer.position + n) {
-      await audioPlayer.seek(audioPlayer.position + n);
+    if ((_audioPlayer.duration ?? const Duration(seconds: 0)) >=
+        _audioPlayer.position + n) {
+      await _audioPlayer.seek(_audioPlayer.position + n);
     } else {
-      await audioPlayer
-          .seek(audioPlayer.duration ?? const Duration(seconds: 0));
+      await _audioPlayer
+          .seek(_audioPlayer.duration ?? const Duration(seconds: 0));
     }
   }
 
   Future<void> seekNSecBackward(Duration n) async {
-    if (audioPlayer.position - n >= const Duration(seconds: 0)) {
-      await audioPlayer.seek(audioPlayer.position - n);
+    if (_audioPlayer.position - n >= const Duration(seconds: 0)) {
+      await _audioPlayer.seek(_audioPlayer.position - n);
     } else {
-      await audioPlayer.seek(const Duration(seconds: 0));
+      await _audioPlayer.seek(const Duration(seconds: 0));
     }
   }
 
   void setLoopMode(LoopMode loopMode) {
     if (loopMode == LoopMode.one) {
-      audioPlayer.setLoopMode(LoopMode.one);
+      _audioPlayer.setLoopMode(LoopMode.one);
     } else {
-      audioPlayer.setLoopMode(LoopMode.off);
+      _audioPlayer.setLoopMode(LoopMode.off);
     }
     this.loopMode.add(loopMode);
   }
@@ -407,10 +437,10 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       return;
     }
     await WakelockPlus.disable();
-    await audioPlayer.pause();
+    await _audioPlayer.pause();
     // If the audio player is playing, pause it [Temporary bug]
-    if (audioPlayer.playing) {
-      audioPlayer.pause();
+    if (_audioPlayer.playing) {
+      _audioPlayer.pause();
     }
 
     log("paused", name: "bloomeePlayer");
@@ -476,7 +506,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       await pause();
 
       print('[Latency] Setting AudioSource (preload: false)...');
-      await audioPlayer.setAudioSource(audioSource,
+      await _audioPlayer.setAudioSource(audioSource,
           initialPosition: initialPosition,
           preload: false); // Pass initialPosition here
 
@@ -484,7 +514,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       try {
         print('[Latency] Loading AudioSource...');
         // Wait up to 8 seconds for load, otherwise treat as network error.
-        await audioPlayer.load().timeout(const Duration(seconds: 8));
+        await _audioPlayer.load().timeout(const Duration(seconds: 8));
         print('[Latency] AudioSource Loaded.');
       } on TimeoutException catch (e) {
         log('audioPlayer.load() timed out: $e', name: 'bloomeePlayer');
@@ -492,12 +522,12 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         _errorHandler.handleError(PlayerErrorType.networkError,
             'Network timeout while loading track', currentItem, e);
         try {
-          await audioPlayer.stop();
+          await _audioPlayer.stop();
         } catch (_) {}
         rethrow;
       }
 
-      if (doPlay && !audioPlayer.playing) {
+      if (doPlay && !_audioPlayer.playing) {
         await play();
       }
 
@@ -592,7 +622,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
             '[Latency] Playback Started. Total Latency: ${readyTime.difference(startTime).inMilliseconds}ms');
       }
 
-      if (doPlay && !audioPlayer.playing) {
+      if (doPlay && !_audioPlayer.playing) {
         await play();
       }
 
@@ -620,9 +650,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   @override
   Future<void> rewind() async {
-    if (audioPlayer.processingState == ProcessingState.ready) {
-      await audioPlayer.seek(Duration.zero);
-    } else if (audioPlayer.processingState == ProcessingState.completed) {
+    if (_audioPlayer.processingState == ProcessingState.ready) {
+      await _audioPlayer.seek(Duration.zero);
+    } else if (_audioPlayer.processingState == ProcessingState.completed) {
       await _prepare4play(idx: _queueManager.currentPlayingIdx);
     }
   }
@@ -641,7 +671,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         .copyWith(processingState: AudioProcessingState.idle));
     await playbackState.firstWhere(
         (state) => state.processingState == AudioProcessingState.idle);
-    await audioPlayer.stop();
+    await _audioPlayer.stop();
     DiscordService.clearPresence();
     await super.stop();
   }
@@ -689,8 +719,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
     // Stop and dispose audio player
     try {
-      await audioPlayer.stop();
-      await audioPlayer.dispose();
+      await _audioPlayer.stop();
+      await _audioPlayer.dispose();
     } catch (e) {
       log('Error disposing audio player: $e', name: 'bloomeePlayer');
     }

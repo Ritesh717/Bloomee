@@ -185,7 +185,6 @@ class _SyncedLyricsWidgetState extends State<SyncedLyricsWidget> {
     _streamSubscription = context
         .read<BloomeePlayerCubit>()
         .bloomeePlayer
-        .audioPlayer
         .positionStream
         .listen((event) {
       setState(() {

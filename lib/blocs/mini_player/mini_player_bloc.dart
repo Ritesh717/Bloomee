@@ -21,7 +21,7 @@ class MiniPlayerBloc extends Bloc<MiniPlayerEvent, MiniPlayerState> {
     required this.playerCubit,
   }) : super(MiniPlayerInitial()) {
     combinedStream = Rx.combineLatest2(
-      playerCubit.bloomeePlayer.audioPlayer.playerStateStream,
+      playerCubit.bloomeePlayer.playerStateStream,
       playerCubit.bloomeePlayer.mediaItem,
       (PlayerState playerState, MediaItem? mediaItem) =>
           [playerState, mediaItem],

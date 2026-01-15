@@ -235,17 +235,17 @@ class _KeyboardShortcutsHandlerState extends State<KeyboardShortcutsHandler> {
   }
 
   void _togglePlayPause(dynamic player) {
-    if (player.audioPlayer.playing) {
-      player.audioPlayer.pause();
+    if (player.playing) {
+      player.pause();
     } else {
-      player.audioPlayer.play();
+      player.play();
     }
   }
 
   double _changeVolume(dynamic player, double delta) {
-    final currentVolume = player.audioPlayer.volume;
+    final currentVolume = player.volume;
     final newVolume = (currentVolume + delta).clamp(0.0, 1.0);
-    player.audioPlayer.setVolume(newVolume);
+    player.setVolume(newVolume);
     return newVolume;
   }
 
@@ -253,13 +253,13 @@ class _KeyboardShortcutsHandlerState extends State<KeyboardShortcutsHandler> {
 
   /// Returns (isMuted, volumeLevel)
   (bool, double) _toggleMute(dynamic player) {
-    final currentVolume = player.audioPlayer.volume;
+    final currentVolume = player.volume;
     if (currentVolume > 0) {
       _lastVolumeBeforeMute = currentVolume;
-      player.audioPlayer.setVolume(0.0);
+      player.setVolume(0.0);
       return (true, 0.0);
     } else {
-      player.audioPlayer.setVolume(_lastVolumeBeforeMute);
+      player.setVolume(_lastVolumeBeforeMute);
       return (false, _lastVolumeBeforeMute);
     }
   }

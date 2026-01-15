@@ -40,8 +40,8 @@ class AudioSourceManager {
       if (cachedRecord != null) {
         log("Playing Offline (cached): ${mediaItem.title}",
             name: "AudioSourceManager");
-        SnackbarService.showMessage("Playing Offline",
-            duration: const Duration(seconds: 1));
+        // SnackbarService.showMessage("Playing Offline",
+        //     duration: const Duration(seconds: 1));
 
         final audioSource = AudioSource.uri(
             Uri.file('${cachedRecord.filePath}/${cachedRecord.fileName}'),
@@ -57,8 +57,8 @@ class AudioSourceManager {
         _downloadCache[mediaItem.id] = _down;
 
         log("Playing Offline: ${mediaItem.title}", name: "AudioSourceManager");
-        SnackbarService.showMessage("Playing Offline",
-            duration: const Duration(seconds: 1));
+        // SnackbarService.showMessage("Playing Offline",
+        //     duration: const Duration(seconds: 1));
 
         final audioSource = AudioSource.uri(
             Uri.file('${_down.filePath}/${_down.fileName}'),
