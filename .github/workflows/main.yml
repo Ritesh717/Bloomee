@@ -40,19 +40,29 @@ jobs:
       - name: Create keystore file
         shell: powershell
         run: |
+          if (-not "${{ secrets.KEY_STORE }}") {
+            Write-Error 'KEY_STORE repository secret is not set. Add it at Settings -> Secrets and variables -> Actions -> New repository secret (name: KEY_STORE, value: base64-encoded keystore)'
+            exit 1
+          }
           $b64 = "${{ secrets.KEY_STORE }}"
-          if (-not $b64) { Write-Error 'KEY_STORE secret is empty'; exit 1 }
           $filename = Join-Path -Path $PWD -ChildPath "android/bloomee.jks"
           $bytes = [Convert]::FromBase64String($b64)
           [IO.File]::WriteAllBytes($filename, $bytes)
+          Write-Host "✓ Keystore file created successfully"
 
       - name: Create keystore properties
         shell: powershell
         run: |
+          if (-not "${{ secrets.KEY_PASSWORD }}") { Write-Error 'KEY_PASSWORD secret is not set'; exit 1 }
+          if (-not "${{ secrets.STORE_PASSWORD }}") { Write-Error 'STORE_PASSWORD secret is not set'; exit 1 }
+          if (-not "${{ secrets.KEY_ALIAS }}") { Write-Error 'KEY_ALIAS secret is not set'; exit 1 }
+          
           $keyPropsPath = Join-Path -Path $PWD -ChildPath "android/key.properties"
-          Set-Content -Path $keyPropsPath -Value ("keyPassword=${{ secrets.KEY_PASSWORD }}")
-          Add-Content -Path $keyPropsPath -Value ("storePassword=${{ secrets.STORE_PASSWORD }}")
+          Set-Content -Path $keyPropsPath -Value ("storePassword=${{ secrets.STORE_PASSWORD }}")
+          Add-Content -Path $keyPropsPath -Value ("keyPassword=${{ secrets.KEY_PASSWORD }}")
           Add-Content -Path $keyPropsPath -Value ("keyAlias=${{ secrets.KEY_ALIAS }}")
+          Add-Content -Path $keyPropsPath -Value ("storeFile=bloomee.jks")
+          Write-Host "✓ Key properties file created successfully"
 
       - name: Build App files (Android)
         run: flutter build apk --release --split-per-abi --build-number ${{ github.run_number }}
