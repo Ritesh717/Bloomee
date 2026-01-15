@@ -1820,20 +1820,81 @@ class BloomeeDBService {
           if (!_isAudioFile(filename)) {
             continue;
           }
-          if (existingFileNames.contains(filename)) {
-            continue;
+
+          // Determine album from folder structure
+          String album = "Unknown Album";
+          String actualFilePath = file.parent.path;
+          final parentDirName = p.basename(file.parent.path);
+
+          // If the parent directory is not the root download directory, use it as album
+          if (file.parent.path != dir.path) {
+            album = parentDirName;
           }
 
+          // Check if this file already exists in DB
+          if (existingFileNames.contains(filename)) {
+            // UPDATE EXISTING ENTRY
+            log("Updating existing file: $filename with folder-based album info",
+                name: "BloomeeDBService");
+
+            // Find the download record
+            final downloadRecord = existingDownloads.firstWhere(
+              (d) => d.fileName == filename,
+            );
+
+            // Find the media item
+            final mediaItem = await isarDB.mediaItemDBs
+                .filter()
+                .mediaIDEqualTo(downloadRecord.mediaId)
+                .findFirst();
+
+            if (mediaItem != null) {
+              bool needsUpdate = false;
+
+              // Update filePath if it's different (file might have been moved to subfolder)
+              if (downloadRecord.filePath != actualFilePath) {
+                downloadRecord.filePath = actualFilePath;
+                needsUpdate = true;
+              }
+
+              // Update album if it's from a subfolder and current album is generic
+              if (album != "Unknown Album" &&
+                  (mediaItem.album == "Unknown Album" ||
+                      mediaItem.album.isEmpty)) {
+                mediaItem.album = album;
+                needsUpdate = true;
+              }
+
+              // Update streamingURL to reflect actual file path
+              final correctStreamingURL = file.path;
+              if (mediaItem.streamingURL != correctStreamingURL) {
+                mediaItem.streamingURL = correctStreamingURL;
+                needsUpdate = true;
+              }
+
+              if (needsUpdate) {
+                await isarDB.writeTxn(() async {
+                  await isarDB.downloadDBs.put(downloadRecord);
+                  await isarDB.mediaItemDBs.put(mediaItem);
+                });
+                log("Updated $filename: album=$album, path=$actualFilePath",
+                    name: "BloomeeDBService");
+              }
+            }
+            continue; // Skip to next file
+          }
+
+          // NEW FILE IMPORT (existing logic)
           log("Found existing file: $filename, importing...",
               name: "BloomeeDBService");
 
           final title = p.basenameWithoutExtension(filename);
-          // Use filename as a unique ID fallback
           final fileId = filename;
 
           final newDownload = DownloadDB(
             fileName: filename,
-            filePath: directoryPath,
+            filePath:
+                actualFilePath, // Use actual file path including subfolder
             lastDownloaded: DateTime.now(),
             mediaId: fileId,
           );
@@ -1841,15 +1902,6 @@ class BloomeeDBService {
           // Try to read metadata from file
           String finalTitle = title;
           String artist = "Unknown Artist";
-
-          // Default album from folder name if in a subdirectory
-          String album = "Unknown Album";
-          final parentDirName = p.basename(file.parent.path);
-          // If the parent directory is not the root download directory, use it as album
-          // We assume 'dir' is the root download directory from the start of function
-          if (file.parent.path != dir.path) {
-            album = parentDirName;
-          }
           String artUrl = "";
           Duration? duration;
 
@@ -1887,19 +1939,7 @@ class BloomeeDBService {
           await isarDB.writeTxn(() async {
             await isarDB.downloadDBs.put(newDownload);
             await isarDB.mediaItemDBs.put(mediaItem);
-            // Also add the media item to the "Downloaded" playlist or similar if needed
-            // But usually it's just available in 'Downloads' tab via queries.
-            // We can use addMediaItem wrapper to be safe if that handles playlist logic?
-            // But here we are manually puitting. Let's stick to simple puts for now as per function style.
           });
-
-          // Optionally add to Downloads playlist wrapper for consistency if that's how app works
-          // The previous code wasn't doing this, so I'll stick to bare DB puts to match existing logic
-          // but ensure fields are populated.
-          // Wait, the previous implementation used `addMediaItem` inside `putDownloadDB`,
-          // so maybe we should use that here too?
-          // `putDownloadDB` does: put DownloadDB AND addMediaItem to 'Download' playlist.
-          // Let's use `addMediaItem` here too to be consistent!
 
           await addMediaItem(mediaItem, GlobalStrConsts.downloadPlaylist);
         }

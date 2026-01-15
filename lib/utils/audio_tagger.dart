@@ -26,10 +26,23 @@ class AudioMetadata {
 
 /// A dedicated module for writing metadata to audio files.
 class AudioTagger {
+  static bool _isInitialized = false;
+
+  /// Call this after MetadataGod.initialize() succeeds
+  static void markInitialized() {
+    _isInitialized = true;
+  }
+
   /// Writes the provided metadata to the audio file at [filePath].
   /// This is a non-critical operation; it will log errors but not throw them,
   /// ensuring a download is still considered successful even if tagging fails.
   static Future<void> writeTags(String filePath, AudioMetadata metadata) async {
+    if (!_isInitialized) {
+      print(
+          "AudioTagger: Skipping metadata write - MetadataGod not initialized");
+      return;
+    }
+
     File? tempArtworkFile;
     try {
       // 1. Download the artwork to a temporary file.

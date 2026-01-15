@@ -23,6 +23,7 @@ import 'package:Bloomee/services/import_export_service.dart';
 import 'package:Bloomee/utils/external_list_importer.dart';
 import 'package:Bloomee/utils/ticker.dart';
 import 'package:Bloomee/utils/url_checker.dart';
+import 'package:Bloomee/utils/audio_tagger.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -143,6 +144,7 @@ Future<void> main() async {
   debugPrint("Main: Starting MetadataGod init...");
   try {
     await MetadataGod.initialize();
+    AudioTagger.markInitialized();
     debugPrint("Main: MetadataGod init done.");
   } catch (e) {
     debugPrint("Main: MetadataGod init failed: $e");
