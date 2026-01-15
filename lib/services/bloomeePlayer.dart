@@ -15,6 +15,7 @@ import 'package:Bloomee/model/songModel.dart';
 import '../model/MediaPlaylistModel.dart';
 import 'package:Bloomee/services/discord_service.dart';
 import 'package:Bloomee/services/player/recently_played_tracker.dart';
+import 'package:Bloomee/services/player/player_state_storage.dart';
 
 class BloomeeMusicPlayer extends BaseAudioHandler
     with SeekHandler, QueueHandler {
@@ -37,6 +38,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   // Recently played tracker: records plays only after a continuous
   // playback threshold (default 15s)
   late RecentlyPlayedTracker _recentlyPlayedTracker;
+  final _playerStateStorage = PlayerStateStorage();
 
   // Stream subscriptions for proper cleanup
   StreamSubscription? _playbackEventSubscription;
@@ -154,6 +156,10 @@ class BloomeeMusicPlayer extends BaseAudioHandler
           _errorHandler.lastError.value != null) {
         _handlePlaybackFailure();
       }
+      // Save state on significant changes (pause/stop)
+      if (!state.playing) {
+        _savePlayerState();
+      }
     });
 
     // Update the current media item when the audio player changes to the next
@@ -195,12 +201,46 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         EasyThrottle.throttle('skipNext', const Duration(milliseconds: 2000),
             () async => skipToNext());
       }
+
+      // Save state periodically during playback
+      EasyThrottle.throttle('savePlayerState', const Duration(seconds: 10),
+          () => _savePlayerState());
     });
 
     // Refresh shuffle list when queue changes - delegate to queue manager
     _queueSubscription = _queueManager.queue.listen((e) {
       queue.add(e); // Sync with base audio handler queue
+      _savePlayerState();
     });
+  }
+
+  Future<void> _savePlayerState() async {
+    // Don't save if disposed or empty
+    if (_isDisposed || _queueManager.queue.value.isEmpty) return;
+
+    await _playerStateStorage.saveState(
+      queue: _queueManager.queue.value,
+      index: _queueManager.currentPlayingIdx,
+      position: audioPlayer.position,
+    );
+  }
+
+  Future<void> restoreLastSession() async {
+    final state = await _playerStateStorage.restoreState();
+    if (state != null) {
+      final List<MediaItem> queue = state['queue'];
+      final int index = state['index'];
+      final Duration position = state['position'];
+
+      if (queue.isNotEmpty) {
+        _queueManager.restoreState(queue, index);
+        // Load the item but don't play automatically, seek to position
+        await _prepare4play(
+            idx: index, doPlay: false, initialPosition: position);
+        log("Restored last session: Index $index, Pos ${position.inSeconds}s",
+            name: "bloomeePlayer");
+      }
+    }
   }
 
   void _handlePlaybackFailure() {
@@ -418,12 +458,14 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     required AudioSource audioSource,
     required String mediaId,
     Duration? initialPosition,
+    bool doPlay = true,
   }) async {
     try {
       await pause();
-      await seek(initialPosition ?? Duration.zero);
+      // await seek(initialPosition ?? Duration.zero); // Removed incorrect seek
 
-      await audioPlayer.setAudioSource(audioSource);
+      await audioPlayer.setAudioSource(audioSource,
+          initialPosition: initialPosition); // Pass initialPosition here
       // Protect against hanging load calls (observed on Android when DNS fails).
       try {
         // Wait up to 12 seconds for load, otherwise treat as network error.
@@ -439,7 +481,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         rethrow;
       }
 
-      if (!audioPlayer.playing) {
+      if (doPlay && !audioPlayer.playing) {
         await play();
       }
 
@@ -495,7 +537,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       await playAudioSource(
           audioSource: audioSource,
           mediaId: mediaItem.id,
-          initialPosition: initialPosition);
+          initialPosition: initialPosition,
+          doPlay: doPlay);
 
       if (doPlay && !audioPlayer.playing) {
         await play();
@@ -511,14 +554,16 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     }
   }
 
-  Future<void> _prepare4play({int idx = 0, bool doPlay = false}) async {
+  Future<void> _prepare4play(
+      {int idx = 0, bool doPlay = false, Duration? initialPosition}) async {
     final currentItem = _queueManager.currentMediaItem;
     if (currentItem == null) {
       log('Cannot prepare4play: no current media item', name: 'bloomeePlayer');
       return;
     }
 
-    await playMediaItem(currentItem, doPlay: doPlay);
+    await playMediaItem(currentItem,
+        doPlay: doPlay, initialPosition: initialPosition);
   }
 
   @override

@@ -79,4 +79,50 @@ class AudioTagger {
       }
     }
   }
+
+  /// Reads metadata from the audio file at [filePath].
+  /// Returns [AudioMetadata] if successful, or null if reading fails.
+  /// If artwork is found, it saves it to the application documents directory and returns the path.
+  static Future<AudioMetadata?> readTags(String filePath) async {
+    try {
+      final metadata = await MetadataGod.readMetadata(file: filePath);
+      // if (metadata == null) return null; // Removed as per lint
+
+      String artworkUrl = "";
+      // Save artwork to file if present
+      if (metadata.picture != null) {
+        try {
+          final appDir = await getApplicationDocumentsDirectory();
+          final artworkDir = Directory(path.join(appDir.path, 'artworks'));
+          if (!await artworkDir.exists()) {
+            await artworkDir.create(recursive: true);
+          }
+
+          final fileName = path.basenameWithoutExtension(filePath);
+          // Use a safe filename for the artwork
+          final safeFileName = fileName.replaceAll(RegExp(r'[^\w\s\.-]'), '');
+          final artworkFile =
+              File(path.join(artworkDir.path, '$safeFileName.jpg'));
+
+          await artworkFile.writeAsBytes(metadata.picture!.data);
+          artworkUrl = artworkFile.path;
+        } catch (e) {
+          print("Failed to save extracted artwork: $e");
+        }
+      }
+
+      return AudioMetadata(
+        title: metadata.title ?? path.basenameWithoutExtension(filePath),
+        artist: metadata.artist ?? "Unknown Artist",
+        album: metadata.album ?? "Unknown Album",
+        artworkUrl: artworkUrl,
+        duration: metadata.durationMs != null
+            ? Duration(milliseconds: metadata.durationMs!.toInt())
+            : null,
+      );
+    } catch (e) {
+      print("Failed to read metadata from $filePath: $e");
+      return null;
+    }
+  }
 }

@@ -32,6 +32,11 @@ class PlayerInitializer {
       await Future.delayed(const Duration(milliseconds: 100));
     }
 
+    // Restore last session
+    if (bloomeeMusicPlayer != null) {
+      await bloomeeMusicPlayer!.restoreLastSession();
+    }
+
     // Check for zombie state and revive if necessary
     if (bloomeeMusicPlayer != null && !bloomeeMusicPlayer!.isPlayerHealthy) {
       await bloomeeMusicPlayer!.revive();

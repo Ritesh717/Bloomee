@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:Bloomee/services/db/bloomee_db_service.dart';
 
 import 'package:Bloomee/blocs/settings_cubit/cubit/settings_cubit.dart';
+import 'package:Bloomee/blocs/downloader/cubit/downloader_cubit.dart';
 import 'package:Bloomee/screens/widgets/setting_tile.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -56,7 +57,8 @@ Future<bool> storagePermission() async {
 
 class _MoveProgressDialog extends StatefulWidget {
   final String newPath;
-  const _MoveProgressDialog({required this.newPath});
+  final String oldPath;
+  const _MoveProgressDialog({required this.newPath, required this.oldPath});
 
   @override
   State<_MoveProgressDialog> createState() => _MoveProgressDialogState();
@@ -79,7 +81,8 @@ class _MoveProgressDialogState extends State<_MoveProgressDialog> {
   }
 
   void _startMove() {
-    BloomeeDBService.moveDownloads(widget.newPath, (current, total, fileName) {
+    BloomeeDBService.moveDownloads(widget.newPath, widget.oldPath,
+        (current, total, fileName) {
       if (mounted) {
         setState(() {
           currentCount = current;
@@ -89,7 +92,15 @@ class _MoveProgressDialogState extends State<_MoveProgressDialog> {
           currentFile = fileName;
         });
       }
-    }).then((_) {
+    }).then((_) async {
+      // Scan for existing files in the new location
+      if (mounted) {
+        setState(() {
+          status = "Scanning for existing files...";
+        });
+      }
+      await BloomeeDBService.scanAndImportExistingFiles(widget.newPath);
+
       if (mounted) {
         Navigator.of(context).pop(); // Close the dialog
       }
@@ -166,6 +177,16 @@ class _DownloadSettingsState extends State<DownloadSettings> {
                   onPressed: () {
                     Navigator.pop(context);
                     context.read<SettingsCubit>().setDownPath(value);
+
+                    // Clear DB and scan new location
+                    BloomeeDBService.clearAllDownloads().then((_) async {
+                      await BloomeeDBService.scanAndImportExistingFiles(value);
+                      if (context.mounted) {
+                        context
+                            .read<DownloaderCubit>()
+                            .refreshDownloadedSongs();
+                      }
+                    });
                   },
                   child: const Text("No"),
                 ),
@@ -177,7 +198,8 @@ class _DownloadSettingsState extends State<DownloadSettings> {
                       context: context,
                       barrierDismissible: false,
                       builder: (context) {
-                        return _MoveProgressDialog(newPath: value);
+                        return _MoveProgressDialog(
+                            newPath: value, oldPath: currentPath);
                       },
                     ).then((_) {
                       // When dialog closes (operation finished)
@@ -191,6 +213,7 @@ class _DownloadSettingsState extends State<DownloadSettings> {
               ],
             ),
           );
+          context.read<SettingsCubit>().setDownPath(value);
         } else {
           // Even if path is same, we might want to ensure it's set
           context.read<SettingsCubit>().setDownPath(value);

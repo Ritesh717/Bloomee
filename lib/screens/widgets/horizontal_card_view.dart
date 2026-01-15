@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:Bloomee/blocs/mediaPlayer/bloomee_player_cubit.dart';
+import 'package:Bloomee/model/album_onl_model.dart';
+import 'package:Bloomee/screens/screen/common_views/album_view.dart';
 import 'package:Bloomee/screens/screen/home_views/youtube_views/playlist.dart';
 import 'package:Bloomee/screens/widgets/square_card.dart';
 import 'package:Bloomee/theme_data/default.dart';
@@ -93,15 +95,39 @@ class HorizontalCardView extends StatelessWidget {
                                   ),
                                 );
                                 break;
+                              case "album":
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => AlbumView(
+                                      album: AlbumModel(
+                                        name: data["items"][i]["title"],
+                                        imageURL: data["items"][i]["image"],
+                                        source: 'youtube',
+                                        sourceId: data["items"][i]["id"],
+                                        artists:
+                                            data["items"][i]["subtitle"] ?? "",
+                                        sourceURL:
+                                            "https://music.youtube.com/playlist?list=${data["items"][i]["id"]}",
+                                      ),
+                                    ),
+                                  ),
+                                );
+                                break;
                               case "video":
                                 ExternalMediaImporter.ytMediaImporter(
                                         'https://youtu.be/${(data["items"][i]["id"] as String).replaceAll("youtube", "")}')
                                     .then((value) async {
                                   if (value != null) {
-                                    await context
+                                    final player = context
                                         .read<BloomeePlayerCubit>()
-                                        .bloomeePlayer
-                                        .addQueueItem(value);
+                                        .bloomeePlayer;
+                                    await player.addQueueItem(value);
+                                    if (player.queue.value.isNotEmpty) {
+                                      await player.skipToQueueItem(
+                                          player.queue.value.length - 1);
+                                      await player.play();
+                                    }
                                   }
                                 });
                                 break;

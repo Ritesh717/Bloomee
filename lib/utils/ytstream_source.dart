@@ -13,10 +13,18 @@ Future<AudioOnlyStreamInfo> getStreamInfoBG(
   final ytExplode = YoutubeExplode();
   final manifest = await ytExplode.videos.streams.getManifest(videoId,
       requireWatchPage: true, ytClients: [YoutubeApiClient.androidVr]);
-  final supportedStreams = manifest.audioOnly.sortByBitrate();
+
+  // Prefer MP4 (AAC) streams for better Android compatibility
+  final audioStreams = manifest.audioOnly;
+  final mp4Streams =
+      audioStreams.where((s) => s.container == StreamContainer.mp4).toList();
+  final streamsToUse = mp4Streams.isNotEmpty ? mp4Streams : audioStreams;
+
+  final supportedStreams = streamsToUse.sortByBitrate();
   final audioStream = quality == 'high'
       ? supportedStreams.lastOrNull
       : supportedStreams.firstOrNull;
+
   if (audioStream == null) {
     throw Exception('No audio stream available for this video.');
   }

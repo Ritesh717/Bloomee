@@ -404,20 +404,20 @@ Future<void> _onRestoreTap(BuildContext context) async {
                     activeColor: Default_Theme.accentColor2,
                     checkColor: Colors.white,
                   ),
-                  // CheckboxListTile(
-                  //   value: settingsAndPrefs,
-                  //   onChanged: (v) {
-                  //     setState(() => settingsAndPrefs = v ?? false);
-                  //     updateSelectAllFromChildren();
-                  //   },
-                  //   title: Text(
-                  //       "Settings & preferences (theme, equalizer, tokens)",
-                  //       style: Default_Theme.secondoryTextStyle
-                  //           .merge(const TextStyle(color: Colors.white))),
-                  //   controlAffinity: ListTileControlAffinity.leading,
-                  //   activeColor: Default_Theme.accentColor2,
-                  //   checkColor: Colors.white,
-                  // ),
+                  CheckboxListTile(
+                    value: settingsAndPrefs,
+                    onChanged: (v) {
+                      setState(() => settingsAndPrefs = v ?? false);
+                      updateSelectAllFromChildren();
+                    },
+                    title: Text(
+                        "Settings & preferences (theme, equalizer, tokens)",
+                        style: Default_Theme.secondoryTextStyle
+                            .merge(const TextStyle(color: Colors.white))),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    activeColor: Default_Theme.accentColor2,
+                    checkColor: Colors.white,
+                  ),
                 ],
               ),
             ),
@@ -466,7 +466,7 @@ Future<void> _onRestoreTap(BuildContext context) async {
             "This will overwrite and merge the parts you selected in the app with data from the backup file:\n\n"
             "${options.restoreMediaItems ? "• Media items\n" : ""}"
             "${options.restoreSearchHistory ? "• Search history\n" : ""}"
-            // "${options.restoreSettings ? "• Settings & preferences\n" : ""}\n"
+            "${options.restoreSettings ? "• Settings & preferences\n" : ""}\n"
             "Your current data will be modified/merged. Are you sure you want to proceed?",
             style: Default_Theme.secondoryTextStyle
                 .merge(const TextStyle(color: Colors.white70, fontSize: 14)),
@@ -535,7 +535,7 @@ Future<void> _onRestoreTap(BuildContext context) async {
       // Signature: restoreDB(path, settings, searchHistory, mediaitems)
       restoreResult = await BloomeeDBService.restoreDB(
         savedPath,
-        // settings: options.restoreSettings,
+        settings: options.restoreSettings,
         searchHistory: options.restoreSearchHistory,
         mediaItems: options.restoreMediaItems,
       );

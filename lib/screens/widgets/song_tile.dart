@@ -1,7 +1,6 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'package:Bloomee/screens/screen/common_views/song_info_screen.dart';
 import 'package:Bloomee/screens/widgets/snackbar.dart';
-import 'package:Bloomee/services/db/bloomee_db_service.dart';
 import 'package:Bloomee/utils/imgurl_formator.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -233,7 +232,9 @@ class _DownloadStatusButton extends StatelessWidget {
                   color: Default_Theme.primaryColor1,
                   size: 25), // Standard size
               onPressed: () {
-                context.read<DownloaderCubit>().downloadSong(song, showSnackbar: false);
+                context
+                    .read<DownloaderCubit>()
+                    .downloadSong(song, showSnackbar: false);
               },
             );
           }
@@ -516,25 +517,27 @@ class _DeleteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final downloaderCubit = context.read<DownloaderCubit>();
+
     return Padding(
       padding: const EdgeInsets.only(left: 2),
       child: IconButton(
         icon: _SongCardStyles.deleteIcon,
-        onPressed: _handleDelete,
+        onPressed: () => _handleDelete(downloaderCubit),
       ),
     );
   }
 
-  void _handleDelete() {
+  void _handleDelete(DownloaderCubit downloaderCubit) async {
     try {
       if (playerCubit.bloomeePlayer.currentMedia.id != song.id) {
-        BloomeeDBService.removeDownloadDB(song);
+        await downloaderCubit.deleteDownload(song);
         SnackbarService.showMessage("Removed ${song.title}");
       } else {
         SnackbarService.showMessage("Cannot delete currently playing song");
       }
     } catch (e) {
-      BloomeeDBService.removeDownloadDB(song);
+      await downloaderCubit.deleteDownload(song);
       SnackbarService.showMessage("Removed ${song.title}");
     }
   }

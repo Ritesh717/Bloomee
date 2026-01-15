@@ -113,6 +113,7 @@ class DownloadEngine {
     );
     _queue.add(task);
     onTaskAdded?.call(task);
+    print("DownloadEngine: Task added: ${task.fileName}");
     if (!_isProcessing) {
       _processNext();
     }
@@ -145,6 +146,7 @@ class DownloadEngine {
           message: "Download Complete",
           filePath: task.targetPath));
     } catch (e) {
+      print("DownloadEngine: Error in _processNext: $e");
       task.statusController.add(
           DownloadStatus(state: DownloadState.failed, message: e.toString()));
     } finally {
@@ -163,8 +165,11 @@ class DownloadEngine {
                 state: DownloadState.downloading, progress: progress));
           }
         });
+        print("DownloadEngine: File downloaded successfully: ${task.fileName}");
         return;
       } catch (e) {
+        print(
+            "DownloadEngine: Attempt ${attempt + 1} failed for ${task.fileName}: $e");
         if (attempt < task.maxRetries) {
           if (!task.statusController.isClosed) {
             task.statusController.add(DownloadStatus(

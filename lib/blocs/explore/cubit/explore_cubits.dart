@@ -405,12 +405,32 @@ class YTMusicCubit extends Cubit<YTMusicCubitState> {
           final lang = langs[0];
           print("LOG: FetchYTMusic: Fetching content for $lang");
 
-          final songResults =
-              await YtMusicService().search("$lang Top Songs", filter: "songs");
-          final albumResults = await YtMusicService()
-              .search("$lang Top Albums", filter: "albums");
-          final latestResults = await YtMusicService()
-              .search("Latest $lang Songs", filter: "songs");
+          final results = await Future.wait([
+            YtMusicService().search("$lang Top Songs", filter: "songs"),
+            YtMusicService().search("$lang Top Albums", filter: "albums"),
+            YtMusicService().search("Latest $lang Songs", filter: "songs"),
+          ]);
+          final songResults = results[0];
+          final albumResults = results[1];
+          final latestResults = results[2];
+
+          // Helper to transform search items for playback compatibility
+          Map<String, dynamic> transformItem(Map<String, dynamic> item) {
+            final newItem = Map<String, dynamic>.from(item);
+
+            // HorizontalCardView expects 'video' for playable songs
+            if (newItem['type'] == 'song') {
+              newItem['type'] = 'video';
+            }
+
+            // Ensure ID is accessible via 'id' key
+            if (newItem['id'] == null && newItem['videoId'] != null) {
+              newItem['id'] = newItem['videoId'];
+            }
+
+            newItem['_language'] = lang;
+            return newItem;
+          }
 
           // Collect all items from each language and TAG them
           if (songResults.isNotEmpty &&
@@ -418,8 +438,8 @@ class YTMusicCubit extends Cubit<YTMusicCubitState> {
               songResults[0]['items'] != null) {
             final items = songResults[0]['items'] as List;
             for (var item in items) {
-              final typedItem = Map<String, dynamic>.from(item as Map);
-              typedItem['_language'] = lang; // Add language tag
+              final typedItem =
+                  transformItem(Map<String, dynamic>.from(item as Map));
               allSongResults.add(typedItem);
             }
           }
@@ -428,8 +448,8 @@ class YTMusicCubit extends Cubit<YTMusicCubitState> {
               albumResults[0]['items'] != null) {
             final items = albumResults[0]['items'] as List;
             for (var item in items) {
-              final typedItem = Map<String, dynamic>.from(item as Map);
-              typedItem['_language'] = lang; // Add language tag
+              final typedItem =
+                  transformItem(Map<String, dynamic>.from(item as Map));
               allAlbumResults.add(typedItem);
             }
           }
@@ -438,8 +458,8 @@ class YTMusicCubit extends Cubit<YTMusicCubitState> {
               latestResults[0]['items'] != null) {
             final items = latestResults[0]['items'] as List;
             for (var item in items) {
-              final typedItem = Map<String, dynamic>.from(item as Map);
-              typedItem['_language'] = lang; // Add language tag
+              final typedItem =
+                  transformItem(Map<String, dynamic>.from(item as Map));
               allLatestResults.add(typedItem);
             }
           }
@@ -516,13 +536,16 @@ class YTMusicCubit extends Cubit<YTMusicCubitState> {
     print("LOG: Fetching on-demand content for $language");
 
     try {
-      final songResults =
-          await YtMusicService().search("$language Top Songs", filter: "songs");
-      final albumResults = await YtMusicService()
-          .search("$language Top Albums", filter: "albums");
-      final latestResults = await YtMusicService()
-          .search("Latest $language Songs", filter: "songs");
+      final results = await Future.wait([
+        YtMusicService().search("$language Top Songs", filter: "songs"),
+        YtMusicService().search("$language Top Albums", filter: "albums"),
+        YtMusicService().search("Latest $language Songs", filter: "songs"),
+      ]);
+      final songResults = results[0];
+      final albumResults = results[1];
+      final latestResults = results[2];
 
+      print("LOG: Fetched language content for $language");
       // Get current data
       final currentData = Map<String, dynamic>.from(_originalYtmData);
       final bodyData =
@@ -538,16 +561,30 @@ class YTMusicCubit extends Cubit<YTMusicCubitState> {
       final latestSongsIndex = bodyData
           .indexWhere((s) => s['title']?.toString().contains('Latest') == true);
 
+      // Helper to transform search items for playback compatibility
+      Map<String, dynamic> transformItem(Map<String, dynamic> item) {
+        final newItem = Map<String, dynamic>.from(item);
+        if (newItem['type'] == 'song') {
+          newItem['type'] = 'video';
+        }
+        if (newItem['id'] == null && newItem['videoId'] != null) {
+          newItem['id'] = newItem['videoId'];
+        }
+        newItem['_language'] = language;
+        return newItem;
+      }
+
       // Add new language items to existing sections
       if (topSongsIndex != -1 &&
           songResults.isNotEmpty &&
+          songResults[0] != null &&
           songResults[0]['items'] != null) {
         final items = songResults[0]['items'] as List;
         final existingItems =
             List<Map<String, dynamic>>.from(bodyData[topSongsIndex]['items']);
         for (var item in items) {
-          final typedItem = Map<String, dynamic>.from(item as Map);
-          typedItem['_language'] = language;
+          final typedItem =
+              transformItem(Map<String, dynamic>.from(item as Map));
           existingItems.add(typedItem);
         }
         bodyData[topSongsIndex]['items'] = existingItems;
@@ -556,13 +593,14 @@ class YTMusicCubit extends Cubit<YTMusicCubitState> {
 
       if (topAlbumsIndex != -1 &&
           albumResults.isNotEmpty &&
+          albumResults[0] != null &&
           albumResults[0]['items'] != null) {
         final items = albumResults[0]['items'] as List;
         final existingItems =
             List<Map<String, dynamic>>.from(bodyData[topAlbumsIndex]['items']);
         for (var item in items) {
-          final typedItem = Map<String, dynamic>.from(item as Map);
-          typedItem['_language'] = language;
+          final typedItem =
+              transformItem(Map<String, dynamic>.from(item as Map));
           existingItems.add(typedItem);
         }
         bodyData[topAlbumsIndex]['items'] = existingItems;
@@ -571,13 +609,14 @@ class YTMusicCubit extends Cubit<YTMusicCubitState> {
 
       if (latestSongsIndex != -1 &&
           latestResults.isNotEmpty &&
+          latestResults[0] != null &&
           latestResults[0]['items'] != null) {
         final items = latestResults[0]['items'] as List;
         final existingItems = List<Map<String, dynamic>>.from(
             bodyData[latestSongsIndex]['items']);
         for (var item in items) {
-          final typedItem = Map<String, dynamic>.from(item as Map);
-          typedItem['_language'] = language;
+          final typedItem =
+              transformItem(Map<String, dynamic>.from(item as Map));
           existingItems.add(typedItem);
         }
         bodyData[latestSongsIndex]['items'] = existingItems;

@@ -6,7 +6,7 @@ import 'package:Bloomee/model/saavnModel.dart';
 import 'package:Bloomee/utils/audio_tagger.dart';
 import 'package:Bloomee/utils/dload.dart';
 import 'package:Bloomee/utils/imgurl_formator.dart';
-import 'package:metadata_god/metadata_god.dart';
+// import 'package:metadata_god/metadata_god.dart'; // Unused
 import 'package:path/path.dart' as path;
 import 'package:Bloomee/blocs/internet_connectivity/cubit/connectivity_cubit.dart';
 import 'package:Bloomee/model/songModel.dart';
@@ -34,7 +34,7 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     required this.libraryItemsCubit,
   }) : super(DownloaderInitial()) {
     _downloadEngine.onTaskAdded = _handleNewTask;
-    MetadataGod.initialize();
+    // MetadataGod.initialize(); // Moved to main.dart
     _setupLibrarySubscription();
     _loadDownloadedSongs();
   }
@@ -96,7 +96,45 @@ class DownloaderCubit extends Cubit<DownloaderState> {
 
   /// Public method to refresh downloaded songs
   Future<void> refreshDownloadedSongs() async {
+    SnackbarService.showMessage("Refreshing downloads...");
+
+    // 1. Queue downloads for missing files (restore)
+    try {
+      final missing = await BloomeeDBService.getMissingDownloads();
+
+      if (missing.isNotEmpty) {
+        SnackbarService.showMessage(
+            "Restoring ${missing.length} missing downloads...");
+        for (var song in missing) {
+          downloadSong(song, showSnackbar: false);
+        }
+      }
+    } catch (e) {
+      log("Error restoring downloads: $e", name: "DownloaderCubit");
+    }
+
+    // 2. Scan for new files in the download directory
+    try {
+      final directory = await _getDownloadDirectory();
+      await BloomeeDBService.scanAndImportExistingFiles(directory.path);
+    } catch (e) {
+      log("Error scanning files: $e", name: "DownloaderCubit");
+    }
+
+    // 3. Reload from DB (this will clean up stale entries)
     await _loadDownloadedSongs();
+  }
+
+  /// Delete a downloaded song and update UI
+  Future<void> deleteDownload(MediaItemModel song) async {
+    try {
+      await BloomeeDBService.removeDownloadDB(song);
+      await _loadDownloadedSongs();
+      log("Deleted ${song.title}", name: "DownloaderCubit");
+    } catch (e) {
+      log("Error deleting ${song.title}", error: e, name: "DownloaderCubit");
+      rethrow;
+    }
   }
 
   void _handleNewTask(DownloadTask task) {
@@ -155,6 +193,8 @@ class DownloaderCubit extends Cubit<DownloaderState> {
 
   void _onDownloadFailed(DownloadTask task) {
     log("Failed to download ${task.fileName}", name: "DownloaderCubit");
+    print(
+        "DownloaderCubit: Failed to download ${task.fileName}"); // Added print
     if (task.showSnackbar) {
       SnackbarService.showMessage(
           "Failed to download ${task.audioMetadata?.title ?? task.fileName}");
@@ -209,7 +249,24 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     }
 
     // Get directory for both placeholder and actual download
-    final directory = await _getDownloadDirectory();
+    var directory = await _getDownloadDirectory();
+
+    // Organize by Album
+    if (song.album != null &&
+        song.album!.isNotEmpty &&
+        song.album != "Unknown Album") {
+      final sanitizedAlbum =
+          song.album!.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
+      final albumDir = Directory(path.join(directory.path, sanitizedAlbum));
+      try {
+        if (!await albumDir.exists()) {
+          await albumDir.create(recursive: true);
+        }
+        directory = albumDir;
+      } catch (e) {
+        print("DownloaderCubit: Failed to create album directory: $e");
+      }
+    }
 
     // Create placeholder task immediately to show resolving state
     final sanitizedTitle =
@@ -342,6 +399,8 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     } catch (e) {
       log("Failed to prepare download for ${song.title}",
           error: e, name: "DownloaderCubit");
+      print(
+          "DownloaderCubit: Failed to prepare download for ${song.title}: $e"); // Added print
 
       // Remove the placeholder on error
       _activeDownloads.removeWhere(
