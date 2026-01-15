@@ -28,6 +28,8 @@ class GlobalStrConsts {
   static const String chartShowMap = "chartShowMap";
   static const String autoSaveLyrics = "autoSaveLyrics";
   static const String autoPlay = "autoPlaySimilarItems";
+  static const String contentLanguages = "contentLanguages";
+  static const String displayLanguage = "displayLanguage";
 
   // LastFM
   static const String lFMApiKey = "lastFMKey";

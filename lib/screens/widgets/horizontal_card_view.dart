@@ -112,7 +112,7 @@ class HorizontalCardView extends StatelessWidget {
                             imgPath: data["items"][i]["image"].toString(),
                             title: data["items"][i]["title"].toString(),
                             subtitle: data["items"][i]["subtitle"].toString(),
-                            isWide: data["items"][i]['isWide'],
+                            isWide: data["items"][i]['isWide'] ?? false,
                             tag: (data["items"][i]['type'] == "playlist" ||
                                     data["items"][i]['type'] == "chart")
                                 ? '${data["items"][i]["count"]}'
