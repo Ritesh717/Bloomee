@@ -6,134 +6,114 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build & Release
-    runs-on: windows-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    build:
+        name: Build & Release
+        runs-on: windows-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
 
-      - name: Setup-Java
-        uses: actions/setup-java@v3.12.0
-        with:
-          distribution: 'oracle'
-          java-version: '17'
+            - name: Setup-Java
+              uses: actions/setup-java@v3.12.0
+              with:
+                distribution: 'oracle'
+                java-version: '17'
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.35.4'
-          channel: 'stable'
+            - name: Setup Flutter
+              uses: subosito/flutter-action@v2
+              with:
+                flutter-version: '3.35.4'
+                channel: 'stable'
 
-      - name: Install Dependencies
-        run: flutter pub get
+            - name: Install Dependencies
+              run: flutter pub get
 
-      - id: extract_version
-        name: Extract version from pubspec.yaml
-        shell: powershell
-        run: |
-          $vLine = Select-String -Path pubspec.yaml -Pattern '^version:\s*(\S+)' | Select-Object -First 1
-          if (-not $vLine) { Write-Error 'version not found in pubspec.yaml'; exit 1 }
-          $ver = $vLine.Matches[0].Groups[1].Value.Split('+')[0]
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$ver"
+            - name: Extract version from pubspec.yaml
+              shell: powershell
+              run: |
+                  $vLine = Select-String -Path pubspec.yaml -Pattern '^version:\s*(\S+)' | Select-Object -First 1
+                  if (-not $vLine) { Write-Error 'version not found in pubspec.yaml'; exit 1 }
+                  $ver = $vLine.Matches[0].Groups[1].Value.Split('+')[0]
+                  echo "VERSION=$ver" >> $env:GITHUB_ENV
 
-      - name: Create keystore file
-        shell: powershell
-        run: |
-          if (-not "${{ secrets.KEY_STORE }}") {
-            Write-Error 'KEY_STORE repository secret is not set. Add it at Settings -> Secrets and variables -> Actions -> New repository secret (name: KEY_STORE, value: base64-encoded keystore)'
-            exit 1
-          }
-          $b64 = "${{ secrets.KEY_STORE }}"
-          $filename = Join-Path -Path $PWD -ChildPath "android/bloomee.jks"
-          $bytes = [Convert]::FromBase64String($b64)
-          [IO.File]::WriteAllBytes($filename, $bytes)
-          Write-Host "✓ Keystore file created successfully"
+            - name: Create keystore file
+              shell: powershell
+              run: |
+                  # Use single-quoted string to avoid breaking PowerShell if secret contains double quotes
+                  $b64 = '${{ secrets.KEY_STORE }}'
+                  if (-not $b64) {
+                    Write-Error 'KEY_STORE repository secret is not set. Add it at Settings -> Secrets and variables -> Actions -> New repository secret (name: KEY_STORE, value: base64-encoded keystore)'
+                    exit 1
+                  }
+                  $filename = "./android/bloomee.jks"
+                  $bytes = [Convert]::FromBase64String($b64)
+                  [IO.File]::WriteAllBytes($filename, $bytes)
 
-      - name: Create keystore properties
-        shell: powershell
-        run: |
-          if (-not "${{ secrets.KEY_PASSWORD }}") { Write-Error 'KEY_PASSWORD secret is not set'; exit 1 }
-          if (-not "${{ secrets.STORE_PASSWORD }}") { Write-Error 'STORE_PASSWORD secret is not set'; exit 1 }
-          if (-not "${{ secrets.KEY_ALIAS }}") { Write-Error 'KEY_ALIAS secret is not set'; exit 1 }
-          
-          $keyPropsPath = Join-Path -Path $PWD -ChildPath "android/key.properties"
-          Set-Content -Path $keyPropsPath -Value ("storePassword=${{ secrets.STORE_PASSWORD }}")
-          Add-Content -Path $keyPropsPath -Value ("keyPassword=${{ secrets.KEY_PASSWORD }}")
-          Add-Content -Path $keyPropsPath -Value ("keyAlias=${{ secrets.KEY_ALIAS }}")
-          Add-Content -Path $keyPropsPath -Value ("storeFile=bloomee.jks")
-          Write-Host "✓ Key properties file created successfully"
+            - name: Create Keystore properties
+              shell: powershell
+              run: |
+                  # Write properties safely using Out-File to avoid quoting/parsing issues
+                  $lines = @(
+                    "keyPassword=${{ secrets.KEY_PASSWORD }}",
+                    "storePassword=${{ secrets.STORE_PASSWORD }}",
+                    "keyAlias=${{ secrets.KEY_ALIAS }}"
+                  )
+                  $lines | Out-File -FilePath ./android/key.properties -Encoding UTF8
 
-      - name: Build App files (Android)
-        run: flutter build apk --release --split-per-abi --build-number ${{ github.run_number }}
+            - name: Build App files
+              run: flutter build apk --release --split-per-abi --build-number ${{github.run_number}}
 
-      - name: Verify Sign
-        shell: powershell
-        run: |
-          $androidRoot = $env:ANDROID_SDK_ROOT
-          if (-not $androidRoot) { $androidRoot = $env:ANDROID_HOME }
-          if (-not $androidRoot) { Write-Error 'Android SDK root not found in ANDROID_SDK_ROOT or ANDROID_HOME'; exit 1 }
-          $buildToolsDir = Get-ChildItem "$androidRoot\build-tools" -Directory | Sort-Object Name -Descending | Select-Object -First 1
-          if (-not $buildToolsDir) { Write-Error 'No build-tools found'; exit 1 }
-          Write-Host "Using build tools version: $($buildToolsDir.Name)"
-          & "$($buildToolsDir.FullName)\apksigner.bat" verify "build/app/outputs/flutter-apk/app-release.apk"
-          & "$($buildToolsDir.FullName)\apksigner.bat" verify "build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"
-          & "$($buildToolsDir.FullName)\apksigner.bat" verify "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
-          & "$($buildToolsDir.FullName)\apksigner.bat" verify "build/app/outputs/flutter-apk/app-x86_64-release.apk"
+            - name: Verify Sign
+              run: |
+                  $buildToolsDir = Get-ChildItem "$env:ANDROID_HOME\build-tools" | Where-Object { $_.PSIsContainer } | Sort-Object Name -Descending | Select-Object -First 1
+                  Write-Host "Using build tools version: $($buildToolsDir.Name)"
+                  & "$($buildToolsDir.FullName)\apksigner.bat" verify build/app/outputs/flutter-apk/app-release.apk
+                  & "$($buildToolsDir.FullName)\apksigner.bat" verify build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+                  & "$($buildToolsDir.FullName)\apksigner.bat" verify build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+                  & "$($buildToolsDir.FullName)\apksigner.bat" verify build/app/outputs/flutter-apk/app-x86_64-release.apk
 
-      - name: Rename APK files
-        shell: powershell
-        run: |
-          $v = "${{ steps.extract_version.outputs.version }}"
-          $rn = "${{ github.run_number }}"
-          Rename-Item -Path "build/app/outputs/flutter-apk/app-release.apk" -NewName "bloomee_tunes_android_v${v}+${rn}_universal.apk"
-          Rename-Item -Path "build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk" -NewName "bloomee_tunes_android_v${v}+${rn}_armeabi-v7a.apk"
-          Rename-Item -Path "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk" -NewName "bloomee_tunes_android_v${v}+${rn}_arm64-v8a.apk"
-          Rename-Item -Path "build/app/outputs/flutter-apk/app-x86_64-release.apk" -NewName "bloomee_tunes_android_v${v}+${rn}_x86_64.apk"
+            - name: Rename APK file
+              shell: powershell
+              run: |
+                  Rename-Item -Path "build/app/outputs/flutter-apk/app-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_universal.apk"
+                  Rename-Item -Path "build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_armeabi-v7.apk"
+                  Rename-Item -Path "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_arm64-v8a.apk"
+                  Rename-Item -Path "build/app/outputs/flutter-apk/app-x86_64-release.apk" -NewName "bloomee_tunes_android_v$env:VERSION+${{github.run_number}}_x86_64.apk"
 
-      - name: Build Windows App
-        run: flutter build windows --release --build-number ${{ github.run_number }}
+            - name: Build Windows App
+              run: flutter build windows --release --build-number ${{github.run_number}}
+            
+            - name: Create build-number.txt file
+              run: echo ${{github.run_number}} > build-number.txt
 
-      - name: Create build-number.txt file
-        shell: powershell
-        run: |
-          Set-Content -Path build-number.txt -Value "${{ github.run_number }}"
+            - name: Rename file
+              run: Rename-Item -Path "build/windows/x64/runner/Release/bloomee.exe" -NewName "Bloomee.exe"
+             
+            - name: ZIP build
+              run: Compress-Archive -Path build/windows/x64/runner/Release/* -Destination  build/windows/x64/bloomee_tunes_windows_x64_v${{ env.VERSION }}+${{github.run_number}}.zip
+            
+            - name: Upload Artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                name: Release
+                path: |
+                  build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ env.VERSION }}+${{github.run_number}}_universal.apk
+                  build/windows/x64/bloomee_tunes_windows_x64_v${{ env.VERSION }}+${{github.run_number}}.zip
+                  build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ env.VERSION }}+${{github.run_number}}_armeabi-v7a.apk
+                  build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ env.VERSION }}+${{github.run_number}}_arm64-v8a.apk
+                  build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ env.VERSION }}+${{github.run_number}}_x86_64.apk
 
-      - name: Rename Windows EXE
-        shell: powershell
-        run: |
-          Rename-Item -Path "build/windows/x64/runner/Release/bloomee.exe" -NewName "Bloomee.exe"
-
-      - name: ZIP build
-        shell: powershell
-        run: |
-          $v = "${{ steps.extract_version.outputs.version }}"
-          $rn = "${{ github.run_number }}"
-          $dest = "build/windows/x64/bloomee_tunes_windows_x64_v${v}+${rn}.zip"
-          if (-Not (Test-Path -Path "build/windows/x64/runner/Release")) { Write-Error "Windows release folder not found"; exit 1 }
-          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath $dest -Force
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Release
-          path: |
-            build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}_universal.apk
-            build/windows/x64/bloomee_tunes_windows_x64_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}.zip
-            build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}_armeabi-v7a.apk
-            build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}_arm64-v8a.apk
-            build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}_x86_64.apk
-
-      - name: Create Release
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: |
-            build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}_universal.apk
-            build/windows/x64/bloomee_tunes_windows_x64_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}.zip
-            build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}_armeabi-v7a.apk
-            build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}_arm64-v8a.apk
-            build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}_x86_64.apk
-            build-number.txt
-          tag: v${{ steps.extract_version.outputs.version }}+${{ github.run_number }}
-          token: ${{ secrets.SECRET_KEY }}
-          prerelease: true
+            - name: Create Release
+              uses: ncipollo/release-action@v1
+              with:
+                artifacts: |
+                  build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ env.VERSION }}+${{github.run_number}}_universal.apk
+                  build/windows/x64/bloomee_tunes_windows_x64_v${{ env.VERSION }}+${{github.run_number}}.zip
+                  build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ env.VERSION }}+${{github.run_number}}_armeabi-v7a.apk
+                  build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ env.VERSION }}+${{github.run_number}}_arm64-v8a.apk
+                  build/app/outputs/flutter-apk/bloomee_tunes_android_v${{ env.VERSION }}+${{github.run_number}}_x86_64.apk
+                  build-number.txt
+                  
+                tag: v${{ env.VERSION }}+${{github.run_number}}
+                token: ${{secrets.SECRET_KEY}}
+                prerelease: true
