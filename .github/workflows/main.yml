@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     branches: main
     
-
 jobs:
     build:
         name: Build & Release
         runs-on: windows-latest
+        env:
+          PUB_CACHE: ${{ runner.workspace }}/.pub-cache
         steps:
             - name: Checkout Repository
               uses: actions/checkout@v4
@@ -46,10 +47,16 @@ jobs:
             
             - name: Create Keystore properties
               run: |
-                  echo keyPassword=\${{ secrets.KEY_PASSWORD }} > ./android/key.properties
-                  echo storePassword=\${{ secrets.STORE_PASSWORD }} >> ./android/key.properties
-                  echo keyAlias=\${{ secrets.KEY_ALIAS }} >> ./android/key.properties
-            
+                  echo keyPassword=\
+${{ secrets.KEY_PASSWORD }} > ./android/key.properties
+                  echo storePassword=\
+${{ secrets.STORE_PASSWORD }} >> ./android/key.properties
+                  echo keyAlias=\
+${{ secrets.KEY_ALIAS }} >> ./android/key.properties
+
+            - name: Flutter clean
+              run: flutter clean
+
             - name: Build App files
               run: flutter build apk --release --split-per-abi --build-number ${{github.run_number}}
 
@@ -80,7 +87,7 @@ jobs:
 
             - name: Rename file
               run: Rename-Item -Path "build/windows/x64/runner/Release/bloomee.exe" -NewName "Bloomee.exe"
-           
+             
             - name: ZIP build
               run: Compress-Archive -Path build/windows/x64/runner/Release/* -Destination  build/windows/x64/bloomee_tunes_windows_x64_v${{ env.VERSION }}+${{github.run_number}}.zip
             
@@ -109,5 +116,3 @@ jobs:
                 tag: v${{ env.VERSION }}+${{github.run_number}}
                 token: ${{secrets.SECRET_KEY}}
                 prerelease: true
-
-    
