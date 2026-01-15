@@ -1344,7 +1344,7 @@ class BloomeeDBService {
   static Future<List<MediaItemModel>> getDownloadedSongs() async {
     Isar isarDB = await db;
     List<DownloadDB> _downloadedSongs =
-        isarDB.downloadDBs.where(sort: Sort.desc).findAllSync();
+        await isarDB.downloadDBs.where(sort: Sort.desc).findAll();
     // Sort downloaded songs by last downloaded date
     _downloadedSongs.sort((a, b) {
       final aDate = a.lastDownloaded;
@@ -1357,12 +1357,12 @@ class BloomeeDBService {
 
     List<MediaItemModel> _mediaItems = List.empty(growable: true);
     for (var element in _downloadedSongs) {
-      if (File("${element.filePath}/${element.fileName}").existsSync()) {
+      if (await File("${element.filePath}/${element.fileName}").exists()) {
         log("File exists", name: "DB");
-        final mediaItemDB = isarDB.mediaItemDBs
+        final mediaItemDB = await isarDB.mediaItemDBs
             .filter()
             .mediaIDEqualTo(element.mediaId)
-            .findFirstSync();
+            .findFirst();
 
         if (mediaItemDB != null) {
           _mediaItems.add(MediaItemDB2MediaItem(mediaItemDB));
@@ -1375,18 +1375,18 @@ class BloomeeDBService {
       } else {
         log("File not exists ${element.fileName} ", name: "DB");
 
-        final mediaItemDB = isarDB.mediaItemDBs
+        final mediaItemDB = await isarDB.mediaItemDBs
             .filter()
             .mediaIDEqualTo(element.mediaId)
-            .findFirstSync();
+            .findFirst();
 
         if (mediaItemDB != null) {
-          removeDownloadDB(MediaItemDB2MediaItem(mediaItemDB));
+          await removeDownloadDB(MediaItemDB2MediaItem(mediaItemDB));
         } else {
           // Can't remove nicely without MediaItem, but we can try to clean up the downloadDB purely by ID if we had logic for it
           // For now, standard remove requires MediaItemModel.
           // We can manually delete the DownloadDB entry if we want to be thorough.
-          isarDB.writeTxnSync(() => isarDB.downloadDBs.deleteSync(element.id!));
+          await isarDB.writeTxn(() => isarDB.downloadDBs.delete(element.id!));
         }
       }
     }

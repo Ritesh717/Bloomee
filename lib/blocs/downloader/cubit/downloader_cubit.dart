@@ -16,6 +16,9 @@ import 'package:Bloomee/services/db/bloomee_db_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 part 'downloader_state.dart';
@@ -45,25 +48,45 @@ class DownloaderCubit extends Cubit<DownloaderState> {
         await BloomeeDBService.getSettingStr(GlobalStrConsts.downPathSetting);
 
     if (customPath != null && customPath.isNotEmpty) {
-      final customDir = Directory(customPath);
-      // On Android, if we have permission, we can use this path.
-      // We assume permission is checked/granted at selection time or runtime.
-      if (await customDir.exists()) {
-        return customDir;
+      if (Platform.isAndroid) {
+        // Android 11+ (API 30+) Scoped Storage Check
+        final androidInfo = await DeviceInfoPlugin().androidInfo;
+        if (androidInfo.version.sdkInt >= 30) {
+          // For custom paths on Android 11+, we need MANAGE_EXTERNAL_STORAGE
+          // If we don't have it, we must fallback to app-specific directory
+          // This prevents the "EACCES (Permission denied)" errors
+          if (!await Permission.manageExternalStorage.isGranted) {
+            log("Custom path requires MANAGE_EXTERNAL_STORAGE. Falling back to default.",
+                name: "DownloaderCubit");
+            // Fallback to default logic below
+          } else {
+            // We have permission, try to use custom path
+            final customDir = Directory(customPath);
+            if (await customDir.exists()) return customDir;
+          }
+        } else {
+          // Android 10 and below, usually READ/WRITE_EXTERNAL_STORAGE is enough
+          final customDir = Directory(customPath);
+          if (await customDir.exists()) return customDir;
+        }
       } else {
-        // Try creating it if it doesn't exist (optional, but good practice)
-        try {
-          await customDir.create(recursive: true);
+        // Non-Android platforms
+        final customDir = Directory(customPath);
+        if (await customDir.exists()) {
           return customDir;
-        } catch (e) {
-          log("Failed to create custom directory: $e", name: "DownloaderCubit");
-          // Fallback if creation fails
+        } else {
+          try {
+            await customDir.create(recursive: true);
+            return customDir;
+          } catch (e) {
+            log("Failed to create custom directory: $e",
+                name: "DownloaderCubit");
+          }
         }
       }
     }
 
     if (Platform.isAndroid || Platform.isIOS) {
-      // For Android (fallback) and iOS, use the internal storage's downloads directory
       final directory = (await getDownloadsDirectory()) ??
           await getApplicationDocumentsDirectory();
       return directory;
@@ -165,13 +188,9 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     });
   }
 
-  /// --- NEW: Handles saving metadata to the database after completion ---
+  /// Handles saving metadata to the database after completion
   void _onDownloadComplete(DownloadTask task) async {
     log("Downloaded ${task.fileName}", name: "DownloaderCubit");
-    // if (task.showSnackbar) {
-    //   SnackbarService.showMessage(
-    //       "Downloaded ${task.audioMetadata?.title ?? task.fileName}");
-    // }
 
     // Only save to DB if it was a song with a MediaItemModel
     final downloadDirectory = path.dirname(task.targetPath);
@@ -193,12 +212,7 @@ class DownloaderCubit extends Cubit<DownloaderState> {
 
   void _onDownloadFailed(DownloadTask task) {
     log("Failed to download ${task.fileName}", name: "DownloaderCubit");
-    print(
-        "DownloaderCubit: Failed to download ${task.fileName}"); // Added print
-    // if (task.showSnackbar) {
-    //   SnackbarService.showMessage(
-    //       "Failed to download ${task.audioMetadata?.title ?? task.fileName}");
-    // }
+    print("DownloaderCubit: Failed to download ${task.fileName}");
 
     // Remove the task from the active downloads list
     _activeDownloads
@@ -206,7 +220,7 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     _emitUpdatedState();
   }
 
-  /// --- NEW: Checks the database and filesystem for an existing download ---
+  /// Checks the database and filesystem for an existing download
   Future<bool> _isAlreadyDownloaded(MediaItemModel song) async {
     final dbRecord = await BloomeeDBService.getDownloadDB(song);
     if (dbRecord != null) {
@@ -234,7 +248,15 @@ class DownloaderCubit extends Cubit<DownloaderState> {
       return;
     }
 
-    // --- NEW: Perform pre-download checks ---
+    // Check queue limit (Component 9)
+    if (_activeDownloads.length >= 50) {
+      if (showSnackbar) {
+        // SnackbarService.showMessage("Download queue full (max 50). Please wait.");
+      }
+      return;
+    }
+
+    // Check for duplicates in queue
     if (_activeDownloads
         .any((item) => item.task.originalUrl == song.extras!['perma_url'])) {
       // if (showSnackbar)
@@ -242,6 +264,7 @@ class DownloaderCubit extends Cubit<DownloaderState> {
       return;
     }
 
+    // Check if already downloaded
     if (await _isAlreadyDownloaded(song)) {
       // if (showSnackbar)
       //   SnackbarService.showMessage("${song.title} is already downloaded.");
@@ -318,45 +341,24 @@ class DownloaderCubit extends Cubit<DownloaderState> {
 
       if (song.extras!['source'] == 'youtube' ||
           (song.extras!['perma_url'].toString()).contains('youtube')) {
-        final video = await _yt.videos.get(song.id.replaceAll("youtube", ""));
-        var manifest = await _yt.videos.streams.getManifest(video.id,
-            requireWatchPage: true, ytClients: [YoutubeApiClient.androidVr]);
-        AudioOnlyStreamInfo? audioStreamInfo;
-        await BloomeeDBService.getSettingStr(GlobalStrConsts.ytDownQuality)
-            .then((quality) {
-          if (quality == "High") {
-            audioStreamInfo = manifest.audioOnly
-                .where(
-                  (stream) => stream.container == StreamContainer.mp4,
-                )
-                .withHighestBitrate();
-          } else {
-            audioStreamInfo = manifest.audioOnly
-                .where(
-                  (stream) => stream.container == StreamContainer.mp4,
-                )
-                .sortByBitrate()
-                .first;
-          }
+        // --- NEW: Run YouTube manifest parsing in background isolate ---
+        final quality = await BloomeeDBService.getSettingStr(
+                GlobalStrConsts.ytDownQuality) ??
+            "High";
+
+        final result = await compute(_getYouTubeStream, {
+          'id': song.id,
+          'title': song.title,
+          'artist': song.artist,
+          'album': song.album,
+          'artUri': song.artUri.toString(),
+          'duration': song.duration?.inMilliseconds,
+          'quality': quality,
         });
-        audioStreamInfo ??= manifest.audioOnly.withHighestBitrate();
 
-        if (audioStreamInfo == null) {
-          throw Exception("No suitable audio stream found for ${video.title}");
-        }
-
-        downloadUrl = audioStreamInfo!.url.toString();
-        final sanitizedTitle =
-            song.title.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
-        fileName =
-            '$sanitizedTitle by ${song.artist} - ${song.id}.${audioStreamInfo!.container.name}';
-        metadata = AudioMetadata(
-          title: song.title,
-          artist: song.artist ?? "Unknown Artist",
-          album: song.album ?? "Unknown Album",
-          artworkUrl: formatImgURL(song.artUri.toString(), ImageQuality.high),
-          duration: song.duration,
-        );
+        downloadUrl = result['downloadUrl'];
+        fileName = result['fileName'];
+        metadata = result['metadata'];
       } else {
         downloadUrl = song.extras!['url'];
         final quality =
@@ -409,6 +411,63 @@ class DownloaderCubit extends Cubit<DownloaderState> {
 
       // if (showSnackbar)
       //   SnackbarService.showMessage("Error: Could not process URL.");
+    }
+  }
+
+  /// Static method to fetch YouTube stream info in an isolate
+  static Future<Map<String, dynamic>> _getYouTubeStream(
+      Map<String, dynamic> args) async {
+    final yt = YoutubeExplode();
+    try {
+      final String id = args['id'].replaceAll("youtube", "");
+      final String quality = args['quality'];
+
+      final video = await yt.videos.get(id);
+      var manifest = await yt.videos.streams.getManifest(video.id,
+          requireWatchPage: true, ytClients: [YoutubeApiClient.androidVr]);
+
+      AudioOnlyStreamInfo? audioStreamInfo;
+
+      if (quality == "High") {
+        audioStreamInfo = manifest.audioOnly
+            .where((stream) => stream.container == StreamContainer.mp4)
+            .withHighestBitrate();
+      } else {
+        audioStreamInfo = manifest.audioOnly
+            .where((stream) => stream.container == StreamContainer.mp4)
+            .sortByBitrate()
+            .first;
+      }
+
+      audioStreamInfo ??= manifest.audioOnly.withHighestBitrate();
+
+      if (audioStreamInfo == null) {
+        throw Exception("No suitable audio stream found for ${video.title}");
+      }
+
+      final downloadUrl = audioStreamInfo.url.toString();
+      final sanitizedTitle =
+          args['title'].replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
+      final fileName =
+          '$sanitizedTitle by ${args['artist']} - ${args['id']}.${audioStreamInfo.container.name}';
+
+      final metadata = AudioMetadata(
+        title: args['title'],
+        artist: args['artist'] ?? "Unknown Artist",
+        album: args['album'] ?? "Unknown Album",
+        artworkUrl: formatImgURL(args['artUri'], ImageQuality.high),
+        duration: args['duration'] != null
+            ? Duration(milliseconds: args['duration'])
+            : null,
+      );
+
+      return {
+        'downloadUrl': downloadUrl,
+        'fileName': fileName,
+        'metadata': metadata,
+      };
+    } finally {
+      yt.close();
     }
   }
 

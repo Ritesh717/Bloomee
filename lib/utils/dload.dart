@@ -52,6 +52,10 @@ class DownloadTask {
   final StreamController<DownloadStatus> statusController =
       StreamController<DownloadStatus>.broadcast();
 
+  // Cancellation support
+  bool _isCancelled = false;
+  final List<Isolate> _activeIsolates = [];
+
   DownloadTask({
     required this.url,
     required this.originalUrl,
@@ -78,6 +82,38 @@ class DownloadTask {
   }
 
   Stream<DownloadStatus> get statusStream => statusController.stream;
+
+  /// Cancel this download and kill all active isolates
+  void cancel() {
+    if (_isCancelled) return;
+    _isCancelled = true;
+
+    // Kill all active isolates
+    for (var isolate in _activeIsolates) {
+      isolate.kill(priority: Isolate.immediate);
+    }
+    _activeIsolates.clear();
+
+    // Update status
+    if (!statusController.isClosed) {
+      statusController.add(const DownloadStatus(
+        state: DownloadState.cancelled,
+        message: "Download cancelled",
+      ));
+    }
+  }
+
+  bool get isCancelled => _isCancelled;
+
+  void _addIsolate(Isolate isolate) {
+    if (!_isCancelled) {
+      _activeIsolates.add(isolate);
+    }
+  }
+
+  void _removeIsolate(Isolate isolate) {
+    _activeIsolates.remove(isolate);
+  }
 }
 
 /// The core, source-agnostic download engine.
@@ -130,21 +166,18 @@ class DownloadEngine {
     try {
       await _downloadWithRetries(task);
 
-      if (task.audioMetadata != null) {
-        task.statusController.add(DownloadStatus(
-            state: DownloadState.completed,
-            progress: 1.0,
-            message: "Writing metadata...",
-            filePath: task.targetPath));
-        await AudioTagger.writeTags(task.targetPath, task.audioMetadata!);
-      }
-
-      // --- CHANGE: Attach the final file path to the completion status ---
+      // Report completion immediately, write metadata in background
       task.statusController.add(DownloadStatus(
           state: DownloadState.completed,
           progress: 1.0,
           message: "Download Complete",
           filePath: task.targetPath));
+
+      // Write metadata in background (non-blocking)
+      if (task.audioMetadata != null) {
+        // Use unawaited to fire and forget - metadata writing is non-critical
+        unawaited(AudioTagger.writeTags(task.targetPath, task.audioMetadata!));
+      }
     } catch (e) {
       print("DownloadEngine: Error in _processNext: $e");
       task.statusController.add(
@@ -189,6 +222,11 @@ class DownloadEngine {
 
   Future<void> _downloadFile(
       DownloadTask task, Function(double) onProgress) async {
+    // Check if cancelled before starting
+    if (task.isCancelled) {
+      throw Exception('Download was cancelled');
+    }
+
     final uri = Uri.parse(task.url);
     final response = await http.head(uri).timeout(const Duration(seconds: 10));
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -213,6 +251,11 @@ class DownloadEngine {
     final tempDirPath = tempDir.path;
 
     for (int i = 0; i < segmentCount; i++) {
+      // Check if cancelled before spawning each isolate
+      if (task.isCancelled) {
+        throw Exception('Download was cancelled');
+      }
+
       final start = i * segmentSize;
       final end = min(start + segmentSize - 1, contentLength - 1);
       final completer = Completer<void>();
@@ -227,22 +270,34 @@ class DownloadEngine {
         'tempDirPath': tempDirPath, // Pass the temp directory path
         'sendPort': receivePort.sendPort,
       });
+
+      // Track the isolate for cancellation
+      task._addIsolate(isolate);
+
       receivePort.listen((data) {
         if (data is int) {
           totalDownloaded += data;
           onProgress(min(totalDownloaded / contentLength, 1.0));
         } else if (data == 'done') {
           receivePort.close();
+          task._removeIsolate(isolate);
           isolate.kill(priority: Isolate.immediate);
           completer.complete();
         } else if (data is String && data.startsWith('Error:')) {
           receivePort.close();
+          task._removeIsolate(isolate);
           isolate.kill(priority: Isolate.immediate);
           completer.completeError(Exception(data));
         }
       });
     }
     await Future.wait(segments);
+
+    // Check if cancelled before merging
+    if (task.isCancelled) {
+      throw Exception('Download was cancelled');
+    }
+
     await _mergeFiles(task.targetPath, segmentCount);
   }
 

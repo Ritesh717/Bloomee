@@ -7,28 +7,31 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
-Future<AudioOnlyStreamInfo> getStreamInfoBG(
-    String videoId, RootIsolateToken? token, String quality) async {
+Future<List<AudioOnlyStreamInfo>> getStreamInfoBG(
+    String videoId, RootIsolateToken? token) async {
   BackgroundIsolateBinaryMessenger.ensureInitialized(token!);
   final ytExplode = YoutubeExplode();
-  final manifest = await ytExplode.videos.streams.getManifest(videoId,
-      requireWatchPage: true, ytClients: [YoutubeApiClient.androidVr]);
+  try {
+    final manifest = await ytExplode.videos.streams.getManifest(videoId,
+        requireWatchPage: true, ytClients: [YoutubeApiClient.androidVr]);
 
-  // Prefer MP4 (AAC) streams for better Android compatibility
-  final audioStreams = manifest.audioOnly;
-  final mp4Streams =
-      audioStreams.where((s) => s.container == StreamContainer.mp4).toList();
-  final streamsToUse = mp4Streams.isNotEmpty ? mp4Streams : audioStreams;
+    // Prefer MP4 (AAC) streams for better Android compatibility
+    final audioStreams = manifest.audioOnly;
+    final mp4Streams =
+        audioStreams.where((s) => s.container == StreamContainer.mp4).toList();
+    final streamsToUse = mp4Streams.isNotEmpty ? mp4Streams : audioStreams;
 
-  final supportedStreams = streamsToUse.sortByBitrate();
-  final audioStream = quality == 'high'
-      ? supportedStreams.lastOrNull
-      : supportedStreams.firstOrNull;
+    final supportedStreams = streamsToUse.sortByBitrate();
+    final low = supportedStreams.firstOrNull;
+    final high = supportedStreams.lastOrNull;
 
-  if (audioStream == null) {
-    throw Exception('No audio stream available for this video.');
+    if (low == null) {
+      throw Exception('No audio stream available for this video.');
+    }
+    return [low, high ?? low];
+  } finally {
+    ytExplode.close();
   }
-  return audioStream;
 }
 
 class YouTubeAudioSource extends StreamAudioSource {
@@ -48,11 +51,13 @@ class YouTubeAudioSource extends StreamAudioSource {
       return quality == 'high' ? cachedStreams[1] : cachedStreams[0];
     }
     final vidId = videoId;
-    final qlty = quality;
     final token = RootIsolateToken.instance;
-    final audioStream =
-        await Isolate.run(() => getStreamInfoBG(vidId, token, qlty));
-    return audioStream;
+    final streams = await Isolate.run(() => getStreamInfoBG(vidId, token));
+
+    // Cache the streams for future use
+    cacheYtStreams(id: vidId, hURL: streams[1], lURL: streams[0]);
+
+    return quality == 'high' ? streams[1] : streams[0];
   }
 
   @override

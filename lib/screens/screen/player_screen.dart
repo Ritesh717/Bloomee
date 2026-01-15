@@ -428,7 +428,7 @@ class _LikeChip extends StatefulWidget {
 }
 
 class _LikeChipState extends State<_LikeChip> {
-  bool isLiked = false;
+  final ValueNotifier<bool> isLikedNotifier = ValueNotifier(false);
   String? currentMediaId;
 
   @override
@@ -445,10 +445,15 @@ class _LikeChipState extends State<_LikeChip> {
         .read<BloomeeDBCubit>()
         .isLiked(mediaItem2MediaItemModel(mediaItem));
     if (mounted && currentMediaId == mediaItem.id) {
-      setState(() {
-        isLiked = liked;
-      });
+      isLikedNotifier.value =
+          liked; // No setState needed - ValueNotifier handles updates
     }
+  }
+
+  @override
+  void dispose() {
+    isLikedNotifier.dispose();
+    super.dispose();
   }
 
   @override
@@ -464,32 +469,37 @@ class _LikeChipState extends State<_LikeChip> {
             // Check DB status when song changes
             _checkIfLiked(mediaItem);
 
-            return ActionChip(
-              avatar: Icon(
-                isLiked ? MingCute.heart_fill : MingCute.heart_line,
-                size: 20,
-                color: Default_Theme.primaryColor1,
-              ),
-              label: const Text('Like'),
-              labelStyle: const TextStyle(
-                color: Default_Theme.primaryColor1,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              backgroundColor:
-                  Default_Theme.primaryColor2.withValues(alpha: 0.1),
-              side: BorderSide.none,
-              shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              labelPadding: const EdgeInsets.only(left: 4, right: 4),
-              onPressed: () {
-                final newState = !isLiked;
-                setState(() {
-                  isLiked = newState;
-                });
-                context.read<BloomeeDBCubit>().setLike(
-                    mediaItem2MediaItemModel(mediaItem),
-                    isLiked: newState);
+            return ValueListenableBuilder<bool>(
+              valueListenable: isLikedNotifier,
+              builder: (context, isLiked, child) {
+                return ActionChip(
+                  avatar: Icon(
+                    isLiked ? MingCute.heart_fill : MingCute.heart_line,
+                    size: 20,
+                    color: Default_Theme.primaryColor1,
+                  ),
+                  label: const Text('Like'),
+                  labelStyle: const TextStyle(
+                    color: Default_Theme.primaryColor1,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  backgroundColor:
+                      Default_Theme.primaryColor2.withValues(alpha: 0.1),
+                  side: BorderSide.none,
+                  shape: const StadiumBorder(),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  labelPadding: const EdgeInsets.only(left: 4, right: 4),
+                  onPressed: () {
+                    final newState = !isLiked;
+                    isLikedNotifier.value =
+                        newState; // Update ValueNotifier instead of setState
+                    context.read<BloomeeDBCubit>().setLike(
+                        mediaItem2MediaItemModel(mediaItem),
+                        isLiked: newState);
+                  },
+                );
               },
             );
           }
@@ -514,9 +524,7 @@ class _DownloadChip extends StatelessWidget {
             builder: (context, state) {
               // Check if currently downloading
               final activeDownload = state.downloads.firstWhere(
-                  (element) =>
-                      element.task.originalUrl ==
-                      (currentMedia.extras?['perma_url'] ?? ''),
+                  (element) => element.task.song.id == currentMedia.id,
                   orElse: () => DownloadProgress(
                       task: DownloadTask.empty(),
                       status: const DownloadStatus(
@@ -525,15 +533,15 @@ class _DownloadChip extends StatelessWidget {
               bool isDownloading = activeDownload.task.url != "";
 
               // Check if already downloaded
-              final isDownloaded = state.downloaded.any((element) =>
-                  element.extras?['perma_url'] ==
-                  currentMedia.extras?['perma_url']);
+              final isDownloaded = state.downloaded
+                  .any((element) => element.id == currentMedia.id);
 
               Widget icon;
               String label;
 
               if (isDownloading &&
-                  activeDownload.status.state != DownloadState.failed) {
+                  activeDownload.status.state != DownloadState.failed &&
+                  activeDownload.status.state != DownloadState.completed) {
                 // Downloading state
                 icon = const SizedBox(
                   width: 16,

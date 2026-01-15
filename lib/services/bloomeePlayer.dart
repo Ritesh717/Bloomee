@@ -16,6 +16,7 @@ import '../model/MediaPlaylistModel.dart';
 import 'package:Bloomee/services/discord_service.dart';
 import 'package:Bloomee/services/player/recently_played_tracker.dart';
 import 'package:Bloomee/services/player/player_state_storage.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class BloomeeMusicPlayer extends BaseAudioHandler
     with SeekHandler, QueueHandler {
@@ -89,12 +90,19 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     if (!_isDisposed) return;
     log('Reviving BloomeeMusicPlayer...', name: 'bloomeePlayer');
 
-    // Re-initialize BehaviorSubjects if they were closed
-    if (fromPlaylist.isClosed)
-      fromPlaylist = BehaviorSubject<bool>.seeded(false);
-    if (isOffline.isClosed) isOffline = BehaviorSubject<bool>.seeded(false);
-    if (loopMode.isClosed)
-      loopMode = BehaviorSubject<LoopMode>.seeded(LoopMode.off);
+    // Close old BehaviorSubjects before recreating to prevent memory leaks
+    try {
+      if (!fromPlaylist.isClosed) await fromPlaylist.close();
+      if (!isOffline.isClosed) await isOffline.close();
+      if (!loopMode.isClosed) await loopMode.close();
+    } catch (e) {
+      log('Error closing subjects during revive: $e', name: 'bloomeePlayer');
+    }
+
+    // Now recreate the subjects
+    fromPlaylist = BehaviorSubject<bool>.seeded(false);
+    isOffline = BehaviorSubject<bool>.seeded(false);
+    loopMode = BehaviorSubject<LoopMode>.seeded(LoopMode.off);
 
     _initializeAudioPlayer();
     _initializeModules();
@@ -131,6 +139,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _errorHandler = PlayerErrorHandler();
     _queueManager = QueueManager();
     _relatedSongsManager = RelatedSongsManager();
+
+    // Warm the download cache for instant offline playback lookups
+    _audioSourceManager.warmCache();
 
     // Setup callbacks between modules
     _errorHandler.onSkipToNext = () => skipToNext();
@@ -202,15 +213,14 @@ class BloomeeMusicPlayer extends BaseAudioHandler
             () async => skipToNext());
       }
 
-      // Save state periodically during playback
-      EasyThrottle.throttle('savePlayerState', const Duration(seconds: 10),
-          () => _savePlayerState());
+      // Removed periodic state saving - now only saves on pause/stop and queue changes
+      // This reduces battery drain and database writes
     });
 
     // Refresh shuffle list when queue changes - delegate to queue manager
     _queueSubscription = _queueManager.queue.listen((e) {
       queue.add(e); // Sync with base audio handler queue
-      _savePlayerState();
+      _savePlayerState(); // Save state on queue changes
     });
   }
 
@@ -326,6 +336,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       log('Cannot play: player is disposed', name: 'bloomeePlayer');
       return;
     }
+    await WakelockPlus.enable();
     await audioPlayer.play();
   }
 
@@ -395,6 +406,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       log('Cannot pause: player is disposed', name: 'bloomeePlayer');
       return;
     }
+    await WakelockPlus.disable();
     await audioPlayer.pause();
     // If the audio player is playing, pause it [Temporary bug]
     if (audioPlayer.playing) {
@@ -462,14 +474,18 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   }) async {
     try {
       await pause();
-      // await seek(initialPosition ?? Duration.zero); // Removed incorrect seek
 
+      print('[Latency] Setting AudioSource (preload: false)...');
       await audioPlayer.setAudioSource(audioSource,
-          initialPosition: initialPosition); // Pass initialPosition here
+          initialPosition: initialPosition,
+          preload: false); // Pass initialPosition here
+
       // Protect against hanging load calls (observed on Android when DNS fails).
       try {
-        // Wait up to 12 seconds for load, otherwise treat as network error.
-        await audioPlayer.load().timeout(const Duration(seconds: 12));
+        print('[Latency] Loading AudioSource...');
+        // Wait up to 8 seconds for load, otherwise treat as network error.
+        await audioPlayer.load().timeout(const Duration(seconds: 8));
+        print('[Latency] AudioSource Loaded.');
       } on TimeoutException catch (e) {
         log('audioPlayer.load() timed out: $e', name: 'bloomeePlayer');
         final currentItem = _queueManager.currentMediaItem;
@@ -530,15 +546,51 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   @override
   Future<void> playMediaItem(MediaItem mediaItem,
       {bool doPlay = true, Duration? initialPosition}) async {
+    final startTime = DateTime.now();
+    print('[Latency] Playback Request started for: ${mediaItem.title}');
+
+    // Schedule pre-cache for next song (delayed to prioritize current song loading)
+    final nextItem = _queueManager.nextMediaItem;
+    if (nextItem != null) {
+      Future.delayed(const Duration(seconds: 2), () {
+        print('[PreCache] Triggering for: ${nextItem.title}');
+        _audioSourceManager.preCacheStream(nextItem).then((_) {
+          print('[PreCache] Success for: ${nextItem.title}');
+        }).catchError((e) {
+          print('[PreCache] Failed for: ${nextItem.title}: $e');
+        });
+      });
+    }
+
     try {
       log('Attempting to play: ${mediaItem.title}', name: "bloomeePlayer");
 
       final audioSource = await getAudioSource(mediaItem);
+
+      final fetchTime = DateTime.now();
+      print(
+          '[Latency] AudioSource fetched in ${fetchTime.difference(startTime).inMilliseconds}ms');
+
+      // Concurrency Guard: Check if the queue state has changed while we were fetching the source
+      // This prevents race conditions where rapid skipping causes old requests to overwrite new ones
+      final currentQueueItem = _queueManager.currentMediaItem;
+      if (currentQueueItem != null && currentQueueItem.id != mediaItem.id) {
+        log('Aborting playback of ${mediaItem.title}: Queue moved to ${currentQueueItem.title}',
+            name: "bloomeePlayer");
+        return;
+      }
+
       await playAudioSource(
           audioSource: audioSource,
           mediaId: mediaItem.id,
           initialPosition: initialPosition,
           doPlay: doPlay);
+
+      if (doPlay) {
+        final readyTime = DateTime.now();
+        print(
+            '[Latency] Playback Started. Total Latency: ${readyTime.difference(startTime).inMilliseconds}ms');
+      }
 
       if (doPlay && !audioPlayer.playing) {
         await play();
@@ -583,6 +635,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   @override
   Future<void> stop() async {
+    await WakelockPlus.disable();
     // Stop audio player and clear presence, then propagate stop to audio service
     playbackState.add(playbackState.value
         .copyWith(processingState: AudioProcessingState.idle));

@@ -69,7 +69,7 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
     } else {
       emit(const TimerRunComplete());
       try {
-        bloomeePlayerCubit.bloomeePlayer.pause();
+        bloomeePlayerCubit.bloomeePlayer.stop();
       } catch (e) {
         log(e.toString(), name: "TimerBloc");
       }

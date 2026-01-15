@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:Bloomee/services/audio_service_initializer.dart';
 import 'package:bloc/bloc.dart';
 import 'package:just_audio/just_audio.dart';
@@ -11,6 +12,7 @@ class BloomeePlayerCubit extends Cubit<BloomeePlayerState> {
   late BloomeeMusicPlayer bloomeePlayer;
   PlayerInitState playerInitState = PlayerInitState.intial;
   late Stream<ProgressBarStreams> progressStreams;
+  StreamSubscription<ProgressBarStreams>? _progressSubscription;
 
   BloomeePlayerCubit() : super(BloomeePlayerInitial()) {
     setupPlayer().then((value) => emit(BloomeePlayerState(isReady: true)));
@@ -31,7 +33,8 @@ class BloomeePlayerCubit extends Cubit<BloomeePlayerState> {
   void _setupProgressStreams() {
     progressStreams = Rx.defer(
       () => Rx.combineLatest3(
-          bloomeePlayer.audioPlayer.positionStream,
+          bloomeePlayer.audioPlayer.positionStream.throttleTime(const Duration(
+              milliseconds: 200)), // Throttle to 5 Hz for performance
           bloomeePlayer.audioPlayer.playbackEventStream,
           bloomeePlayer.audioPlayer.playerStateStream,
           (Duration a, PlaybackEvent b, PlayerState c) => ProgressBarStreams(
@@ -41,9 +44,13 @@ class BloomeePlayerCubit extends Cubit<BloomeePlayerState> {
   }
 
   @override
-  Future<void> close() {
+  Future<void> close() async {
+    // Cancel progress stream subscription to prevent memory leaks
+    await _progressSubscription?.cancel();
+    _progressSubscription = null;
+
     if (playerInitState == PlayerInitState.initialized) {
-      bloomeePlayer.stop();
+      await bloomeePlayer.stop();
     }
     return super.close();
   }

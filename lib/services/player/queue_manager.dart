@@ -3,6 +3,8 @@ import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../model/MediaPlaylistModel.dart';
 
+import 'package:synchronized/synchronized.dart';
+
 List<int> generateRandomIndices(int length) {
   List<int> indices = List<int>.generate(length, (i) => i);
   indices.shuffle();
@@ -15,6 +17,9 @@ class QueueManager {
   final BehaviorSubject<bool> shuffleMode = BehaviorSubject<bool>.seeded(false);
   final BehaviorSubject<String> queueTitle =
       BehaviorSubject<String>.seeded("Queue");
+
+  // Lock for queue synchronization
+  final Lock _lock = Lock();
 
   int currentPlayingIdx = 0;
   int shuffleIdx = 0;
@@ -32,10 +37,12 @@ class QueueManager {
 
   Future<void> loadPlaylist(MediaPlaylist mediaList,
       {int idx = 0, bool doPlay = false, bool shuffling = false}) async {
-    queue.add([]);
-    queue.add(mediaList.mediaItems);
-    queueTitle.add(mediaList.playlistName);
-    await shuffle(shuffling || shuffleMode.value);
+    await _lock.synchronized(() async {
+      queue.add([]);
+      queue.add(mediaList.mediaItems);
+      queueTitle.add(mediaList.playlistName);
+      await shuffle(shuffling || shuffleMode.value);
+    });
     await _prepare4play(idx: idx, doPlay: doPlay);
   }
 
@@ -110,15 +117,19 @@ class QueueManager {
   }
 
   Future<void> addQueueItem(MediaItem mediaItem) async {
-    if (queue.value.any((e) => e.id == mediaItem.id)) return;
-    queueTitle.add("Queue");
+    await _lock.synchronized(() async {
+      if (queue.value.any((e) => e.id == mediaItem.id)) return;
+      queueTitle.add("Queue");
 
-    final newQueue = List<MediaItem>.from(queue.value)..add(mediaItem);
-    queue.add(newQueue);
+      final newQueue = List<MediaItem>.from(queue.value)..add(mediaItem);
+      queue.add(newQueue);
 
-    if (newQueue.length == 1) {
-      await _prepare4play(idx: 0, doPlay: true);
-    }
+      if (newQueue.length == 1) {
+        // Don't await this inside the lock as it might trigger other operations
+        // Just schedule it
+        _prepare4play(idx: 0, doPlay: true);
+      }
+    });
   }
 
   void restoreState(List<MediaItem> newQueue, int newIndex) {
@@ -129,21 +140,44 @@ class QueueManager {
 
   Future<void> updateQueue(List<MediaItem> newQueue,
       {bool doPlay = false}) async {
-    queue.add(newQueue);
+    await _lock.synchronized(() async {
+      queue.add(newQueue);
+    });
     await _prepare4play(idx: 0, doPlay: doPlay);
   }
 
   Future<void> addQueueItems(List<MediaItem> mediaItems,
       {String queueName = "Queue", bool atLast = false}) async {
-    if (!atLast) {
-      for (var mediaItem in mediaItems) {
-        await addQueueItem(mediaItem);
+    await _lock.synchronized(() async {
+      if (!atLast) {
+        // Need to rethink this recursive call if we lock, but here we can just add directly
+        // to avoid deadlock if addQueueItem also locks
+
+        final newItems = <MediaItem>[];
+        final currentIds = queue.value.map((e) => e.id).toSet();
+
+        for (var mediaItem in mediaItems) {
+          if (!currentIds.contains(mediaItem.id)) {
+            newItems.add(mediaItem);
+            currentIds.add(mediaItem.id);
+          }
+        }
+
+        if (newItems.isNotEmpty) {
+          queueTitle.add("Queue");
+          final newQueue = List<MediaItem>.from(queue.value)..addAll(newItems);
+          queue.add(newQueue);
+
+          if (queue.value.length == newItems.length) {
+            _prepare4play(idx: 0, doPlay: true);
+          }
+        }
+      } else {
+        final newQueue = List<MediaItem>.from(queue.value)..addAll(mediaItems);
+        queue.add(newQueue);
+        queueTitle.add("Queue");
       }
-    } else {
-      final newQueue = List<MediaItem>.from(queue.value)..addAll(mediaItems);
-      queue.add(newQueue);
-      queueTitle.add("Queue");
-    }
+    });
   }
 
   Future<void> addPlayNextItem(MediaItem mediaItem) async {
@@ -230,6 +264,20 @@ class QueueManager {
       return shuffleIdx > 0;
     }
     return currentPlayingIdx > 0;
+  }
+
+  MediaItem? get nextMediaItem {
+    if (queue.value.isEmpty) return null;
+
+    if (shuffleMode.value) {
+      if (shuffleList.isEmpty || shuffleIdx >= shuffleList.length - 1) {
+        return null;
+      }
+      return queue.value[shuffleList[shuffleIdx + 1]];
+    } else {
+      if (currentPlayingIdx >= queue.value.length - 1) return null;
+      return queue.value[currentPlayingIdx + 1];
+    }
   }
 
   Future<void> _prepare4play({int idx = 0, bool doPlay = false}) async {
