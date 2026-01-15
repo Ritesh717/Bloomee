@@ -11,7 +11,7 @@ import 'package:path/path.dart' as path;
 import 'package:Bloomee/blocs/internet_connectivity/cubit/connectivity_cubit.dart';
 import 'package:Bloomee/model/songModel.dart';
 import 'package:Bloomee/routes_and_consts/global_str_consts.dart';
-import 'package:Bloomee/screens/widgets/snackbar.dart';
+// import 'package:Bloomee/screens/widgets/snackbar.dart'; // Unused - snackbars disabled
 import 'package:Bloomee/services/db/bloomee_db_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -96,15 +96,15 @@ class DownloaderCubit extends Cubit<DownloaderState> {
 
   /// Public method to refresh downloaded songs
   Future<void> refreshDownloadedSongs() async {
-    SnackbarService.showMessage("Refreshing downloads...");
+    // SnackbarService.showMessage("Refreshing downloads...");
 
     // 1. Queue downloads for missing files (restore)
     try {
       final missing = await BloomeeDBService.getMissingDownloads();
 
       if (missing.isNotEmpty) {
-        SnackbarService.showMessage(
-            "Restoring ${missing.length} missing downloads...");
+        // SnackbarService.showMessage(
+        //     "Restoring ${missing.length} missing downloads...");
         for (var song in missing) {
           downloadSong(song, showSnackbar: false);
         }
@@ -168,10 +168,10 @@ class DownloaderCubit extends Cubit<DownloaderState> {
   /// --- NEW: Handles saving metadata to the database after completion ---
   void _onDownloadComplete(DownloadTask task) async {
     log("Downloaded ${task.fileName}", name: "DownloaderCubit");
-    if (task.showSnackbar) {
-      SnackbarService.showMessage(
-          "Downloaded ${task.audioMetadata?.title ?? task.fileName}");
-    }
+    // if (task.showSnackbar) {
+    //   SnackbarService.showMessage(
+    //       "Downloaded ${task.audioMetadata?.title ?? task.fileName}");
+    // }
 
     // Only save to DB if it was a song with a MediaItemModel
     final downloadDirectory = path.dirname(task.targetPath);
@@ -195,10 +195,10 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     log("Failed to download ${task.fileName}", name: "DownloaderCubit");
     print(
         "DownloaderCubit: Failed to download ${task.fileName}"); // Added print
-    if (task.showSnackbar) {
-      SnackbarService.showMessage(
-          "Failed to download ${task.audioMetadata?.title ?? task.fileName}");
-    }
+    // if (task.showSnackbar) {
+    //   SnackbarService.showMessage(
+    //       "Failed to download ${task.audioMetadata?.title ?? task.fileName}");
+    // }
 
     // Remove the task from the active downloads list
     _activeDownloads
@@ -230,21 +230,21 @@ class DownloaderCubit extends Cubit<DownloaderState> {
   Future<void> downloadSong(MediaItemModel song,
       {bool showSnackbar = true}) async {
     if (connectivityCubit.state != ConnectivityState.connected) {
-      if (showSnackbar) SnackbarService.showMessage("No internet connection.");
+      // if (showSnackbar) SnackbarService.showMessage("No internet connection.");
       return;
     }
 
     // --- NEW: Perform pre-download checks ---
     if (_activeDownloads
         .any((item) => item.task.originalUrl == song.extras!['perma_url'])) {
-      if (showSnackbar)
-        SnackbarService.showMessage("${song.title} is already in the queue.");
+      // if (showSnackbar)
+      //   SnackbarService.showMessage("${song.title} is already in the queue.");
       return;
     }
 
     if (await _isAlreadyDownloaded(song)) {
-      if (showSnackbar)
-        SnackbarService.showMessage("${song.title} is already downloaded.");
+      // if (showSnackbar)
+      //   SnackbarService.showMessage("${song.title} is already downloaded.");
       return;
     }
 
@@ -294,8 +294,8 @@ class DownloaderCubit extends Cubit<DownloaderState> {
     _activeDownloads.insert(0, placeholderProgress);
     _emitUpdatedState();
 
-    if (showSnackbar)
-      SnackbarService.showMessage("Preparing download for ${song.title}...");
+    // if (showSnackbar)
+    //   SnackbarService.showMessage("Preparing download for ${song.title}...");
 
     try {
       // Update status to fetching metadata
@@ -394,8 +394,8 @@ class DownloaderCubit extends Cubit<DownloaderState> {
         showSnackbar: showSnackbar,
       );
 
-      if (showSnackbar)
-        SnackbarService.showMessage("Added ${song.title} to download queue");
+      // if (showSnackbar)
+      //   SnackbarService.showMessage("Added ${song.title} to download queue");
     } catch (e) {
       log("Failed to prepare download for ${song.title}",
           error: e, name: "DownloaderCubit");
@@ -407,8 +407,8 @@ class DownloaderCubit extends Cubit<DownloaderState> {
           (item) => item.task.originalUrl == song.extras!['perma_url']);
       _emitUpdatedState();
 
-      if (showSnackbar)
-        SnackbarService.showMessage("Error: Could not process URL.");
+      // if (showSnackbar)
+      //   SnackbarService.showMessage("Error: Could not process URL.");
     }
   }
 

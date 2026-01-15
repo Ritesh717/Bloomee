@@ -185,7 +185,7 @@ class _DownloadStatusButton extends StatelessWidget {
             icon: const Icon(MingCute.check_circle_fill,
                 color: Default_Theme.accentColor1, size: 26),
             onPressed: () {
-              SnackbarService.showMessage("Already downloaded");
+              // Already downloaded - no action needed
             },
           );
         } else {
